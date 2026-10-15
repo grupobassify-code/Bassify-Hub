@@ -1,0 +1,6 @@
+{
+  "name": "Bassify Play — Red Social & Store",
+  "description": "Mini red social estilo Discord y tienda de juegos, apps, noticias y eventos con gestión administrativa y estética PlayStation azul y blanco.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
