@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Plus, TableProperties, ShieldCheck, UserCheck, Star, Menu, MessageSquare, X } from 'lucide-react';
+import { Search, Plus, TableProperties, ShieldCheck, UserCheck, Star, Menu, MessageSquare, X, Lock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { SectionType } from '../types';
 
@@ -10,6 +10,7 @@ export const Header: React.FC = () => {
     searchQuery,
     setSearchQuery,
     isAdmin,
+    isGuest,
     currentUser,
     setIsUploadModalOpen,
     setIsTableModalOpen,
@@ -175,10 +176,26 @@ export const Header: React.FC = () => {
           <MessageSquare className="w-4 h-4" />
         </button>
 
+        {/* Guest: Show Iniciar Sesión button */}
+        {isGuest && (
+          <button
+            onClick={() => setIsAuthModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#003791] to-[#0055cb] hover:brightness-110 text-white text-xs font-bold transition-all shadow-md shrink-0 cursor-pointer"
+            title="Iniciar sesión o registrarse"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span className="hidden xs:inline">Iniciar Sesión</span>
+          </button>
+        )}
+
         {/* User Identity / Profile Button */}
         <button
           onClick={() => setIsProfileOpen(true)}
-          className="flex items-center gap-2 p-1 sm:px-2.5 sm:py-1.5 rounded-xl bg-[#0e1b34] hover:bg-[#152549] border border-[#1b2f57] text-slate-300 hover:text-white transition-all shrink-0 cursor-pointer"
+          className={`flex items-center gap-2 p-1 sm:px-2.5 sm:py-1.5 rounded-xl border transition-all shrink-0 cursor-pointer ${
+            isAdmin
+              ? 'bg-blue-950/60 border-blue-500/40 text-blue-200 hover:text-white'
+              : 'bg-[#0e1b34] hover:bg-[#152549] border-[#1b2f57] text-slate-300 hover:text-white'
+          }`}
           title="Ver perfil o cambiar foto"
         >
           <div className="relative shrink-0">
@@ -198,8 +215,13 @@ export const Header: React.FC = () => {
             {currentUser.name}
           </span>
           {isAdmin ? (
-            <span className="hidden md:inline-block text-[9px] bg-blue-600 text-white px-1.5 py-0.2 rounded font-mono font-bold">
+            <span className="hidden md:inline-flex items-center gap-1 text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-mono font-bold">
+              <ShieldCheck className="w-2.5 h-2.5" />
               ADMIN
+            </span>
+          ) : isGuest ? (
+            <span className="hidden md:inline-block text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded font-mono">
+              INVITADO
             </span>
           ) : null}
         </button>

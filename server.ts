@@ -27,6 +27,20 @@ interface DatabaseSchema {
     blockOffensiveSubmission: boolean;
     customBadWords: string[];
   };
+  auth: {
+    adminEmail: string;
+    adminPassword: string;
+    adminRecoveryPin: string;
+    users: Array<{
+      email: string;
+      name: string;
+      password: string;
+      avatar: string;
+      role: 'admin' | 'user';
+      joinedDate: string;
+      bio?: string;
+    }>;
+  };
 }
 
 const defaultDb: DatabaseSchema = {
@@ -39,6 +53,12 @@ const defaultDb: DatabaseSchema = {
     blockOffensiveSubmission: false,
     customBadWords: [],
   },
+  auth: {
+    adminEmail: 'grupobassify@gmail.com',
+    adminPassword: 'BassifyAdmin2026!',
+    adminRecoveryPin: '9824',
+    users: [],
+  },
 };
 
 // Safe DB Read/Write
@@ -49,7 +69,12 @@ const readDatabase = (): DatabaseSchema => {
       return defaultDb;
     }
     const data = fs.readFileSync(DB_FILE, 'utf-8');
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    if (!parsed.auth) {
+      parsed.auth = defaultDb.auth;
+      writeDatabase(parsed);
+    }
+    return parsed;
   } catch (err) {
     console.error('Error reading database file:', err);
     return defaultDb;
@@ -66,7 +91,154 @@ const writeDatabase = (data: DatabaseSchema) => {
 
 async function startServer() {
   const app = express();
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({ limit: '50mb' }));
+
+  // ==========================================
+  // API ROUTES - AUTH & ACCOUNT SECURITY
+  // ==========================================
+
+  // Login endpoint
+  app.post('/api/auth/login', (req: Request, res: Response) => {
+    const db = readDatabase();
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Debes proporcionar correo y contraseña.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const auth = db.auth || defaultDb.auth;
+
+    // Protect Admin account grupobassify@gmail.com
+    if (cleanEmail === auth.adminEmail.toLowerCase()) {
+      if (password !== auth.adminPassword) {
+        return res.status(401).json({
+          error: 'Contraseña de administrador incorrecta. La cuenta oficial está blindada.',
+        });
+      }
+
+      const adminUser = {
+        email: auth.adminEmail,
+        name: 'Bassify Admin',
+        avatar: '', // App will use DEFAULT_ADMIN_AVATAR
+        role: 'admin',
+        status: 'online',
+        bio: 'Administrador oficial de Bassify Hub.',
+        joinedDate: 'Octubre 2026',
+        isGuest: false,
+      };
+      return res.json({ success: true, user: adminUser });
+    }
+
+    // Standard user login
+    const existingUser = (auth.users || []).find(
+      (u: any) => u.email.toLowerCase() === cleanEmail
+    );
+
+    if (!existingUser) {
+      return res.status(404).json({
+        error: 'No se encontró cuenta con este correo. Puedes crear una nueva en "Registrarse".',
+      });
+    }
+
+    if (existingUser.password !== password) {
+      return res.status(401).json({ error: 'Contraseña incorrecta.' });
+    }
+
+    const { password: _, ...safeUser } = existingUser;
+    return res.json({ success: true, user: { ...safeUser, isGuest: false } });
+  });
+
+  // Register endpoint
+  app.post('/api/auth/register', (req: Request, res: Response) => {
+    const db = readDatabase();
+    const { email, name, password, avatar } = req.body;
+
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'Todos los campos son obligatorios.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const auth = db.auth || defaultDb.auth;
+
+    if (cleanEmail === auth.adminEmail.toLowerCase()) {
+      return res.status(400).json({
+        error: 'Este correo pertenece al Administrador. Por favor inicia sesión con tu contraseña.',
+      });
+    }
+
+    if ((auth.users || []).some((u: any) => u.email.toLowerCase() === cleanEmail)) {
+      return res.status(400).json({ error: 'Ya existe una cuenta registrada con este correo electrónico.' });
+    }
+
+    const newUser = {
+      email: cleanEmail,
+      name: name.trim(),
+      password: password.trim(),
+      avatar: avatar || '',
+      role: 'user' as const,
+      joinedDate: new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }),
+      bio: 'Miembro de la comunidad Bassify Hub.',
+    };
+
+    db.auth = {
+      ...auth,
+      users: [...(auth.users || []), newUser],
+    };
+    writeDatabase(db);
+
+    const { password: _, ...safeUser } = newUser;
+    return res.status(201).json({ success: true, user: { ...safeUser, isGuest: false } });
+  });
+
+  // Change Admin Password
+  app.post('/api/auth/change-admin-password', (req: Request, res: Response) => {
+    const db = readDatabase();
+    const { currentPassword, newPassword, recoveryPin } = req.body;
+    const auth = db.auth || defaultDb.auth;
+
+    if (!newPassword || newPassword.trim().length < 6) {
+      return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres.' });
+    }
+
+    const isCurrentValid = currentPassword && currentPassword === auth.adminPassword;
+    const isPinValid = recoveryPin && recoveryPin === auth.adminRecoveryPin;
+
+    if (!isCurrentValid && !isPinValid) {
+      return res.status(401).json({
+        error: 'La contraseña actual o el PIN de recuperación maestro son incorrectos.',
+      });
+    }
+
+    db.auth = {
+      ...auth,
+      adminPassword: newPassword.trim(),
+    };
+    writeDatabase(db);
+    return res.json({ success: true, message: '¡Contraseña de administrador actualizada con éxito!' });
+  });
+
+  // Reset Admin Password using PIN
+  app.post('/api/auth/reset-admin', (req: Request, res: Response) => {
+    const db = readDatabase();
+    const { recoveryPin, newPassword } = req.body;
+    const auth = db.auth || defaultDb.auth;
+
+    if (!recoveryPin || recoveryPin !== auth.adminRecoveryPin) {
+      return res.status(401).json({ error: 'PIN maestro de recuperación incorrecto.' });
+    }
+
+    if (!newPassword || newPassword.trim().length < 6) {
+      return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres.' });
+    }
+
+    db.auth = {
+      ...auth,
+      adminPassword: newPassword.trim(),
+    };
+    writeDatabase(db);
+    return res.json({ success: true, message: 'Contraseña restablecida exitosamente.' });
+  });
 
   // ==========================================
   // API ROUTES - PERSISTENT DATABASE STORAGE

@@ -15,6 +15,9 @@ import {
   ADMIN_EMAIL,
   DEFAULT_ADMIN_USER,
   DEFAULT_GUEST_USER,
+  DEFAULT_INITIAL_GUEST_USER,
+  DEFAULT_ADMIN_PASSWORD,
+  DEFAULT_ADMIN_RECOVERY_PIN,
   INITIAL_CONTENT,
   CHANNELS,
   INITIAL_CHAT_MESSAGES,
@@ -33,6 +36,7 @@ interface ReportingTarget {
 interface AppContextType {
   currentUser: UserProfile;
   isAdmin: boolean;
+  isGuest: boolean;
   activeSection: SectionType;
   setActiveSection: (section: SectionType) => void;
   activeChannel: string;
@@ -70,7 +74,11 @@ interface AppContextType {
   updateUserProfile: (settings: { name?: string; avatar?: string; bio?: string }) => void;
   clearAllContent: () => void;
 
-  // Actions
+  // Authentication & Security
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (email: string, name: string, password: string, avatar?: string) => Promise<{ success: boolean; error?: string }>;
+  changeAdminPassword: (currentPassword: string, newPassword: string, recoveryPin?: string) => Promise<{ success: boolean; error?: string }>;
+  resetAdminPassword: (recoveryPin: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   loginAs: (email: string, name?: string) => void;
   logout: () => void;
   addItem: (item: Omit<ContentItem, 'id' | 'createdAt' | 'comments' | 'likes' | 'likedBy'>) => void;
@@ -113,14 +121,25 @@ const STORAGE_KEY_USER = 'bassify_hub_user_v6';
 const STORAGE_KEY_CHAT = 'bassify_hub_chat_v6';
 const STORAGE_KEY_REPORTS = 'bassify_hub_reports_v6';
 const STORAGE_KEY_MODERATION = 'bassify_hub_moderation_v6';
+const STORAGE_KEY_AUTH_LOCAL = 'bassify_hub_auth_v6';
+const STORAGE_KEY_ADMIN_VERIFIED = 'bassify_admin_verified_v6';
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Current user state (defaults to Admin grupobassify@gmail.com)
+  // Current user state (defaults to safe Guest mode, never admin by default)
   const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_USER);
       if (saved) {
         const parsed = JSON.parse(saved);
+        // CRITICAL SECURITY: If the saved profile is grupobassify@gmail.com,
+        // it MUST have been validated via password in this browser session.
+        if (parsed.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+          const isVerified = sessionStorage.getItem(STORAGE_KEY_ADMIN_VERIFIED) === 'true';
+          if (!isVerified) {
+            // Not verified with password in active session -> fall back to Guest!
+            return DEFAULT_INITIAL_GUEST_USER;
+          }
+        }
         if (!parsed.avatar || parsed.avatar.includes('unsplash') || parsed.avatar.includes('photo-')) {
           parsed.avatar = parsed.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase()
             ? DEFAULT_ADMIN_AVATAR
@@ -131,10 +150,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {
       // fallback
     }
-    return DEFAULT_ADMIN_USER;
+    // All visitors start as Guest
+    return DEFAULT_INITIAL_GUEST_USER;
   });
 
-  const isAdmin = currentUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  const isAdmin = currentUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && !currentUser.isGuest;
+  const isGuest = !!currentUser.isGuest || currentUser.email === 'invitado@bassify.local';
 
   const [activeSection, setActiveSection] = useState<SectionType>('games');
   const [activeChannel, setActiveChannel] = useState<string>('anuncios');
@@ -256,30 +277,257 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }, 3500);
   };
 
-  const loginAs = (email: string, name?: string) => {
-    const cleanEmail = email.trim().toLowerCase();
-    const isNewAdmin = cleanEmail === ADMIN_EMAIL.toLowerCase();
-    const newUser: UserProfile = {
-      email: cleanEmail,
-      name: name?.trim() || (isNewAdmin ? 'Bassify Admin' : cleanEmail.split('@')[0]),
-      avatar: isNewAdmin ? DEFAULT_ADMIN_AVATAR : DEFAULT_GUEST_AVATAR,
-      role: isNewAdmin ? 'admin' : 'user',
-      status: 'online',
-      bio: isNewAdmin ? 'Administrador oficial de Bassify Hub' : 'Miembro de la comunidad',
-      joinedDate: 'Octubre 2026',
-      bookmarks: [],
+  // Helper to read local auth store
+  const getLocalAuth = () => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY_AUTH_LOCAL);
+      if (stored) return JSON.parse(stored);
+    } catch {
+      // ignore
+    }
+    return {
+      adminPassword: DEFAULT_ADMIN_PASSWORD,
+      adminRecoveryPin: DEFAULT_ADMIN_RECOVERY_PIN,
+      users: [] as any[],
     };
-    setCurrentUser(newUser);
-    if (isNewAdmin) {
-      showToast('Sesión iniciada como Administrador (grupobassify@gmail.com).');
-    } else {
-      showToast(`Sesión iniciada como usuario (${cleanEmail}).`);
+  };
+
+  const saveLocalAuth = (data: any) => {
+    try {
+      localStorage.setItem(STORAGE_KEY_AUTH_LOCAL, JSON.stringify(data));
+    } catch {
+      // ignore
     }
   };
 
+  // Secure Login
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+    const isAdminAccount = cleanEmail === ADMIN_EMAIL.toLowerCase();
+
+    // 1. Try server API first
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Credenciales inválidas.' };
+      }
+
+      const authenticatedUser: UserProfile = {
+        ...data.user,
+        avatar: data.user.avatar || (isAdminAccount ? DEFAULT_ADMIN_AVATAR : DEFAULT_GUEST_AVATAR),
+        isGuest: false,
+      };
+
+      if (isAdminAccount) {
+        sessionStorage.setItem(STORAGE_KEY_ADMIN_VERIFIED, 'true');
+      }
+
+      setCurrentUser(authenticatedUser);
+      showToast(isAdminAccount ? '¡Bienvenido Administrador Bassify!' : `Sesión iniciada como ${authenticatedUser.name}.`);
+      return { success: true };
+    } catch {
+      // 2. Client-side fallback if server is offline / standalone
+      const localAuth = getLocalAuth();
+      if (isAdminAccount) {
+        if (password !== localAuth.adminPassword) {
+          return {
+            success: false,
+            error: 'Contraseña de administrador incorrecta. La cuenta grupobassify@gmail.com está protegida.',
+          };
+        }
+
+        sessionStorage.setItem(STORAGE_KEY_ADMIN_VERIFIED, 'true');
+        setCurrentUser({
+          email: ADMIN_EMAIL,
+          name: 'Bassify Admin',
+          avatar: DEFAULT_ADMIN_AVATAR,
+          role: 'admin',
+          status: 'online',
+          bio: 'Administrador oficial de Bassify Hub.',
+          joinedDate: 'Octubre 2026',
+          isGuest: false,
+        });
+        showToast('¡Bienvenido Administrador Bassify!');
+        return { success: true };
+      }
+
+      const foundUser = localAuth.users.find((u: any) => u.email.toLowerCase() === cleanEmail);
+      if (!foundUser) {
+        return { success: false, error: 'No se encontró cuenta con este correo. Puedes registrarte ahora.' };
+      }
+      if (foundUser.password !== password) {
+        return { success: false, error: 'Contraseña incorrecta.' };
+      }
+
+      const { password: _, ...safeUser } = foundUser;
+      setCurrentUser({ ...safeUser, isGuest: false });
+      showToast(`Sesión iniciada como ${safeUser.name}.`);
+      return { success: true };
+    }
+  };
+
+  // Secure Register
+  const register = async (email: string, name: string, password: string, avatar?: string): Promise<{ success: boolean; error?: string }> => {
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (cleanEmail === ADMIN_EMAIL.toLowerCase()) {
+      return {
+        success: false,
+        error: 'Este correo está reservado para el Administrador oficial. Por favor inicia sesión.',
+      };
+    }
+
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail, name, password, avatar }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Error al crear la cuenta.' };
+      }
+
+      const newUser: UserProfile = {
+        ...data.user,
+        isGuest: false,
+      };
+      setCurrentUser(newUser);
+      showToast(`¡Cuenta creada con éxito! Bienvenido, ${newUser.name}.`);
+      return { success: true };
+    } catch {
+      // Local fallback
+      const localAuth = getLocalAuth();
+      if (localAuth.users.some((u: any) => u.email.toLowerCase() === cleanEmail)) {
+        return { success: false, error: 'Ya existe una cuenta con este correo.' };
+      }
+
+      const newUser = {
+        email: cleanEmail,
+        name: name.trim(),
+        password: password.trim(),
+        avatar: avatar || DEFAULT_GUEST_AVATAR,
+        role: 'user' as const,
+        status: 'online' as const,
+        joinedDate: new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' }),
+        bio: 'Miembro de la comunidad Bassify Hub.',
+        bookmarks: [],
+        isGuest: false,
+      };
+
+      localAuth.users.push(newUser);
+      saveLocalAuth(localAuth);
+
+      const { password: _, ...safeUser } = newUser;
+      setCurrentUser(safeUser);
+      showToast(`¡Cuenta creada con éxito! Bienvenido, ${safeUser.name}.`);
+      return { success: true };
+    }
+  };
+
+  // Change Admin Password
+  const changeAdminPassword = async (
+    currentPassword: string,
+    newPassword: string,
+    recoveryPin?: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/auth/change-admin-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword, recoveryPin }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Error al cambiar la contraseña.' };
+      }
+      // Also update local
+      const localAuth = getLocalAuth();
+      localAuth.adminPassword = newPassword.trim();
+      saveLocalAuth(localAuth);
+      showToast('¡Contraseña de administrador actualizada con éxito!');
+      return { success: true };
+    } catch {
+      const localAuth = getLocalAuth();
+      const isCurrentValid = currentPassword && currentPassword === localAuth.adminPassword;
+      const isPinValid = recoveryPin && recoveryPin === localAuth.adminRecoveryPin;
+
+      if (!isCurrentValid && !isPinValid) {
+        return { success: false, error: 'La contraseña actual o el PIN maestro son incorrectos.' };
+      }
+
+      localAuth.adminPassword = newPassword.trim();
+      saveLocalAuth(localAuth);
+      showToast('¡Contraseña de administrador actualizada con éxito!');
+      return { success: true };
+    }
+  };
+
+  // Reset Admin Password using master PIN
+  const resetAdminPassword = async (
+    recoveryPin: string,
+    newPassword: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/auth/reset-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recoveryPin, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, error: data.error || 'Error al restablecer la contraseña.' };
+      }
+      const localAuth = getLocalAuth();
+      localAuth.adminPassword = newPassword.trim();
+      saveLocalAuth(localAuth);
+      showToast('¡Contraseña restablecida con éxito!');
+      return { success: true };
+    } catch {
+      const localAuth = getLocalAuth();
+      if (recoveryPin !== localAuth.adminRecoveryPin) {
+        return { success: false, error: 'El PIN maestro de recuperación no coincide.' };
+      }
+      localAuth.adminPassword = newPassword.trim();
+      saveLocalAuth(localAuth);
+      showToast('¡Contraseña restablecida con éxito!');
+      return { success: true };
+    }
+  };
+
+  const loginAs = (email: string, name?: string) => {
+    const cleanEmail = email.trim().toLowerCase();
+    // CRITICAL: Block unauthorized login as admin through loginAs!
+    if (cleanEmail === ADMIN_EMAIL.toLowerCase()) {
+      setIsAuthModalOpen(true);
+      showToast('La cuenta oficial grupobassify@gmail.com está protegida. Ingresa tu contraseña.');
+      return;
+    }
+
+    const newUser: UserProfile = {
+      email: cleanEmail,
+      name: name?.trim() || cleanEmail.split('@')[0],
+      avatar: DEFAULT_GUEST_AVATAR,
+      role: 'user',
+      status: 'online',
+      bio: 'Miembro de la comunidad Bassify Hub',
+      joinedDate: 'Octubre 2026',
+      bookmarks: [],
+      isGuest: false,
+    };
+    setCurrentUser(newUser);
+    showToast(`Sesión iniciada como ${newUser.name}.`);
+  };
+
   const logout = () => {
-    setCurrentUser(DEFAULT_GUEST_USER);
-    showToast('Sesión cambiada a usuario estándar.');
+    sessionStorage.removeItem(STORAGE_KEY_ADMIN_VERIFIED);
+    setCurrentUser(DEFAULT_INITIAL_GUEST_USER);
+    showToast('Sesión cerrada. Ahora estás en modo Invitado.');
   };
 
   // Profile Update
@@ -867,6 +1115,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isBookmarked,
         updateUserProfile,
         clearAllContent,
+        isGuest,
+        login,
+        register,
+        changeAdminPassword,
+        resetAdminPassword,
         loginAs,
         logout,
         addItem,

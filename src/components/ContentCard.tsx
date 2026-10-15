@@ -2,6 +2,7 @@ import React from 'react';
 import { Star, Download, Heart, Edit, Trash2, ArrowUpRight, Calendar, MapPin, Hammer, RefreshCw } from 'lucide-react';
 import { ContentItem } from '../types';
 import { useApp } from '../context/AppContext';
+import { SafeImage } from './SafeImage';
 
 interface ContentCardProps {
   item: ContentItem;
@@ -51,11 +52,12 @@ export const ContentCard: React.FC<ContentCardProps> = ({ item }) => {
     >
       {/* Banner Area for 16:9 context */}
       <div className="relative aspect-[16/9] w-full overflow-hidden bg-[#070e1c]">
-        <img
+        <SafeImage
           src={item.bannerUrl || item.logoUrl}
           alt={item.title}
+          fallbackTitle={item.title}
+          itemType={item.type}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          referrerPolicy="no-referrer"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0b162c] via-[#0b162c]/20 to-transparent" />
 
@@ -135,11 +137,12 @@ export const ContentCard: React.FC<ContentCardProps> = ({ item }) => {
         {/* Floating 512x512 Logo Icon (Google Play Store Style) */}
         <div className="absolute -bottom-4 left-4 flex items-end gap-3 z-10">
           <div className="w-14 h-14 rounded-xl overflow-hidden border-2 border-[#192b4f] bg-[#070e1c] shadow-lg shrink-0">
-            <img
+            <SafeImage
               src={item.logoUrl}
               alt={`${item.title} icon`}
+              fallbackTitle={item.title}
+              itemType={item.type}
               className="w-full h-full object-cover"
-              referrerPolicy="no-referrer"
             />
           </div>
         </div>

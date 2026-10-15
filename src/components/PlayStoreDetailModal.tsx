@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ContentItem } from '../types';
+import { SafeImage } from './SafeImage';
 
 interface PlayStoreDetailModalProps {
   item: ContentItem;
@@ -107,11 +108,12 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
 
         {/* Hero Banner Header */}
         <div className="relative h-48 sm:h-64 md:h-80 w-full overflow-hidden bg-slate-900">
-          <img
+          <SafeImage
             src={item.bannerUrl || activeImage}
             alt={item.title}
+            fallbackTitle={item.title}
+            itemType={item.type}
             className="w-full h-full object-cover"
-            referrerPolicy="no-referrer"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#091224] via-[#091224]/50 to-transparent" />
 
@@ -190,11 +192,12 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
             {/* 512x512 Icon + Names */}
             <div className="flex flex-col sm:flex-row items-center sm:items-end gap-3 sm:gap-5">
               <div className="w-20 h-20 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-2xl overflow-hidden border-4 border-[#091224] bg-slate-900 shadow-2xl shrink-0">
-                <img
+                <SafeImage
                   src={item.logoUrl}
                   alt={`${item.title} icon`}
+                  fallbackTitle={item.title}
+                  itemType={item.type}
                   className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
                 />
               </div>
 
@@ -373,11 +376,12 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
                         : 'border-[#1b2d52] hover:border-slate-400'
                     }`}
                   >
-                    <img
+                    <SafeImage
                       src={shot}
                       alt={`Screenshot ${idx + 1}`}
+                      fallbackTitle={`${item.title} ${idx + 1}`}
+                      itemType={item.type}
                       className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
                     />
                   </div>
                 ))}

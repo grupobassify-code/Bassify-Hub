@@ -1,149 +1,533 @@
 import React, { useState } from 'react';
-import { X, ShieldCheck, UserCheck, KeyRound, ArrowRight, User } from 'lucide-react';
+import {
+  X,
+  ShieldCheck,
+  ShieldAlert,
+  KeyRound,
+  Lock,
+  Mail,
+  User,
+  Eye,
+  EyeOff,
+  UserPlus,
+  LogIn,
+  CheckCircle,
+  HelpCircle,
+  Sparkles,
+} from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { ADMIN_EMAIL } from '../data/initialData';
+import { ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD, DEFAULT_ADMIN_RECOVERY_PIN } from '../data/initialData';
+import { DEFAULT_FIGURE_AVATARS } from '../utils/avatars';
 
 export const AuthModal: React.FC = () => {
-  const { isAuthModalOpen, setIsAuthModalOpen, currentUser, loginAs, logout } = useApp();
-  const [customEmail, setCustomEmail] = useState('');
-  const [customName, setCustomName] = useState('');
+  const { isAuthModalOpen, setIsAuthModalOpen, currentUser, login, register, resetAdminPassword, logout } = useApp();
+
+  const [activeTab, setActiveTab] = useState<'login' | 'register' | 'recovery'>('login');
+  
+  // Login states
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Register states
+  const [regEmail, setRegEmail] = useState('');
+  const [regName, setRegName] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regAvatar, setRegAvatar] = useState(DEFAULT_FIGURE_AVATARS[1].url);
+  const [regError, setRegError] = useState<string | null>(null);
+
+  // Recovery states
+  const [recoveryPin, setRecoveryPin] = useState('');
+  const [recoveryNewPassword, setRecoveryNewPassword] = useState('');
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [recoverySuccess, setRecoverySuccess] = useState<string | null>(null);
 
   if (!isAuthModalOpen) return null;
 
-  const handleCustomLogin = (e: React.FormEvent) => {
+  const isTryingAdmin = loginEmail.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customEmail.trim()) return;
-    loginAs(customEmail.trim(), customName.trim());
-    setIsAuthModalOpen(false);
+    setLoginError(null);
+
+    if (!loginEmail.trim() || !loginPassword) {
+      setLoginError('Por favor completa tu correo y contraseña.');
+      return;
+    }
+
+    setIsLoading(true);
+    const res = await login(loginEmail.trim(), loginPassword);
+    setIsLoading(false);
+
+    if (res.success) {
+      setIsAuthModalOpen(false);
+      setLoginPassword('');
+    } else {
+      setLoginError(res.error || 'No se pudo iniciar sesión.');
+    }
   };
 
-  const handleSelectAdmin = () => {
-    loginAs(ADMIN_EMAIL, 'Bassify Admin');
-    setIsAuthModalOpen(false);
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError(null);
+
+    if (!regEmail.trim() || !regName.trim() || !regPassword) {
+      setRegError('Todos los campos son obligatorios.');
+      return;
+    }
+
+    if (regPassword.length < 6) {
+      setRegError('La contraseña debe tener un mínimo de 6 caracteres.');
+      return;
+    }
+
+    if (regEmail.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+      setRegError('El correo oficial grupobassify@gmail.com solo puede ser accedido en la pestaña Iniciar Sesión.');
+      return;
+    }
+
+    setIsLoading(true);
+    const res = await register(regEmail.trim(), regName.trim(), regPassword, regAvatar);
+    setIsLoading(false);
+
+    if (res.success) {
+      setIsAuthModalOpen(false);
+      setRegPassword('');
+    } else {
+      setRegError(res.error || 'Error al crear la cuenta.');
+    }
   };
 
-  const handleSelectGuest = () => {
-    loginAs('usuario_gamer@bassify.net', 'BassifyGamer');
-    setIsAuthModalOpen(false);
+  const handleRecoverySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryError(null);
+    setRecoverySuccess(null);
+
+    if (!recoveryPin.trim() || !recoveryNewPassword) {
+      setRecoveryError('Ingresa el PIN de recuperación maestro y tu nueva contraseña.');
+      return;
+    }
+
+    if (recoveryNewPassword.length < 6) {
+      setRecoveryError('La nueva contraseña debe tener mínimo 6 caracteres.');
+      return;
+    }
+
+    setIsLoading(true);
+    const res = await resetAdminPassword(recoveryPin.trim(), recoveryNewPassword);
+    setIsLoading(false);
+
+    if (res.success) {
+      setRecoverySuccess('¡Contraseña de administrador actualizada con éxito! Ya puedes iniciar sesión.');
+      setLoginEmail(ADMIN_EMAIL);
+      setLoginPassword(recoveryNewPassword);
+      setTimeout(() => {
+        setActiveTab('login');
+      }, 1500);
+    } else {
+      setRecoveryError(res.error || 'PIN de recuperación incorrecto.');
+    }
+  };
+
+  const autofillAdmin = () => {
+    setLoginEmail(ADMIN_EMAIL);
+    setLoginError(null);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="relative w-full max-w-md bg-[#091326] border border-[#1b2f56] rounded-3xl overflow-hidden shadow-2xl p-6 text-slate-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md overflow-y-auto">
+      <div className="relative w-full max-w-lg bg-[#091326] border border-[#1b2f56] rounded-3xl overflow-hidden shadow-2xl p-5 sm:p-7 text-slate-200 my-auto">
+        {/* Close Button */}
         <button
           onClick={() => setIsAuthModalOpen(false)}
-          className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors"
+          className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/40 hover:bg-slate-800 transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#00439c] to-[#0070d1] flex items-center justify-center text-white mx-auto shadow-lg shadow-blue-900/40 mb-3">
+        {/* Header Icon & Title */}
+        <div className="text-center mb-5">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#003791] to-[#0070d1] flex items-center justify-center text-white mx-auto shadow-lg shadow-blue-900/40 mb-3 border border-blue-400/30">
             <KeyRound className="w-6 h-6" />
           </div>
-          <h2 className="text-lg font-bold text-white">Gestión de Cuenta y Permisos</h2>
+          <h2 className="text-lg sm:text-xl font-bold text-white tracking-wide">
+            Centro de Acceso y Seguridad
+          </h2>
           <p className="text-xs text-slate-400 mt-1">
-            Solo el correo oficial <strong className="text-blue-400 font-mono">grupobassify@gmail.com</strong> puede subir contenidos.
+            Plataforma protegida Bassify Hub. Acceso con contraseña requerida.
           </p>
         </div>
 
-        {/* Current status */}
-        <div className="p-3 bg-[#0d1830] border border-[#1d3159] rounded-2xl mb-5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img
-              src={currentUser.avatar}
-              alt={currentUser.name}
-              className="w-10 h-10 rounded-full object-cover border border-blue-500/40"
-              referrerPolicy="no-referrer"
-            />
+        {/* Tab Navigation */}
+        <div className="flex rounded-2xl bg-[#060c18] p-1 border border-[#16274a] mb-5">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('login');
+              setLoginError(null);
+            }}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'login'
+                ? 'bg-[#00439c] text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>Iniciar Sesión</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('register');
+              setRegError(null);
+            }}
+            className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+              activeTab === 'register'
+                ? 'bg-[#00439c] text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>Crear Cuenta</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveTab('recovery');
+              setRecoveryError(null);
+            }}
+            className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1 ${
+              activeTab === 'recovery'
+                ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40 shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+            title="Recuperar o restablecer contraseña del Admin"
+          >
+            <Lock className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Recuperar</span>
+          </button>
+        </div>
+
+        {/* TAB 1: INICIAR SESIÓN */}
+        {activeTab === 'login' && (
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
+            {/* Admin Shield Notice if user types grupobassify@gmail.com */}
+            {isTryingAdmin ? (
+              <div className="p-3.5 rounded-2xl bg-blue-950/60 border border-blue-500/40 text-blue-200 space-y-1.5 shadow-inner">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="text-xs font-bold text-white">
+                    Cuenta Oficial de Administrador Protegida
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Solo tú con la contraseña maestra puedes ingresar a <strong className="text-white font-mono">{ADMIN_EMAIL}</strong>. Nadie más puede acceder sin esta clave.
+                </p>
+                <div className="pt-1 flex items-center justify-between text-[10px] text-blue-300">
+                  <span>Clave inicial: <code className="bg-black/50 px-1.5 py-0.5 rounded text-amber-300 font-mono">{DEFAULT_ADMIN_PASSWORD}</code></span>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('recovery')}
+                    className="text-blue-300 hover:text-white underline font-medium"
+                  >
+                    ¿Olvidaste la clave?
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span>¿Eres el administrador oficial?</span>
+                <button
+                  type="button"
+                  onClick={autofillAdmin}
+                  className="text-blue-400 hover:text-blue-300 font-bold underline flex items-center gap-1"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>Soy grupobassify@gmail.com</span>
+                </button>
+              </div>
+            )}
+
+            {/* Email Input */}
             <div>
-              <p className="text-xs font-bold text-white">{currentUser.name}</p>
-              <p className="text-[11px] text-slate-400 font-mono truncate max-w-[180px]">
-                {currentUser.email}
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Correo Electrónico
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type="email"
+                  required
+                  value={loginEmail}
+                  onChange={e => setLoginEmail(e.target.value)}
+                  placeholder="ejemplo@correo.com o grupobassify@gmail.com"
+                  className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl pl-10 pr-3.5 py-2.5 focus:outline-none focus:border-blue-400"
+                />
+              </div>
+            </div>
+
+            {/* Password Input */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-slate-300">
+                  Contraseña
+                </label>
+                {isTryingAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('recovery')}
+                    className="text-[11px] text-blue-400 hover:text-blue-300 underline"
+                  >
+                    Recuperar con PIN
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={loginPassword}
+                  onChange={e => setLoginPassword(e.target.value)}
+                  placeholder="Ingresa tu contraseña..."
+                  className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl pl-10 pr-10 py-2.5 focus:outline-none focus:border-blue-400 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-200"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {loginError && (
+              <div className="p-3 rounded-xl bg-red-950/50 border border-red-500/40 text-red-200 text-xs flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#003791] to-[#0070d1] hover:brightness-110 text-white text-xs font-bold transition-all shadow-lg shadow-blue-900/30 flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>{isLoading ? 'Verificando credenciales...' : 'Iniciar Sesión'}</span>
+            </button>
+          </form>
+        )}
+
+        {/* TAB 2: REGISTRARSE */}
+        {activeTab === 'register' && (
+          <form onSubmit={handleRegisterSubmit} className="space-y-4 max-h-[65vh] overflow-y-auto pr-1 scrollbar-thin">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Nombre de Usuario o Gamertag *
+              </label>
+              <div className="relative">
+                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type="text"
+                  required
+                  value={regName}
+                  onChange={e => setRegName(e.target.value)}
+                  placeholder="Ej. BassifyMaster, NeonPilot..."
+                  className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl pl-10 pr-3.5 py-2.5 focus:outline-none focus:border-blue-400"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Correo Electrónico *
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type="email"
+                  required
+                  value={regEmail}
+                  onChange={e => setRegEmail(e.target.value)}
+                  placeholder="tu_correo@ejemplo.com"
+                  className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl pl-10 pr-3.5 py-2.5 focus:outline-none focus:border-blue-400"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Contraseña (Mínimo 6 caracteres) *
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  value={regPassword}
+                  onChange={e => setRegPassword(e.target.value)}
+                  placeholder="Crea una contraseña segura..."
+                  className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl pl-10 pr-10 py-2.5 focus:outline-none focus:border-blue-400 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-200"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Geometric Figure Avatar Selector */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Elige tu Foto de Perfil (Figuras Minimalistas)</span>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 bg-[#060c18] p-2.5 rounded-2xl border border-[#16274a]">
+                {DEFAULT_FIGURE_AVATARS.slice(1).map(avatar => (
+                  <button
+                    key={avatar.id}
+                    type="button"
+                    onClick={() => setRegAvatar(avatar.url)}
+                    className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all p-0.5 ${
+                      regAvatar === avatar.url
+                        ? 'border-blue-400 scale-105 shadow-md shadow-blue-500/30'
+                        : 'border-transparent opacity-70 hover:opacity-100 hover:border-slate-600'
+                    }`}
+                    title={avatar.name}
+                  >
+                    <img
+                      src={avatar.url}
+                      alt={avatar.name}
+                      className="w-full h-full object-cover rounded-lg"
+                      referrerPolicy="no-referrer"
+                    />
+                    {regAvatar === avatar.url && (
+                      <div className="absolute inset-0 bg-blue-600/25 flex items-center justify-center">
+                        <CheckCircle className="w-4 h-4 text-white drop-shadow" />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {regError && (
+              <div className="p-3 rounded-xl bg-red-950/50 border border-red-500/40 text-red-200 text-xs flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span>{regError}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#003791] to-[#0070d1] hover:brightness-110 text-white text-xs font-bold transition-all shadow-lg shadow-blue-900/30 flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>{isLoading ? 'Creando cuenta...' : 'Crear Mi Cuenta'}</span>
+            </button>
+          </form>
+        )}
+
+        {/* TAB 3: RECUPERACIÓN ADMIN */}
+        {activeTab === 'recovery' && (
+          <form onSubmit={handleRecoverySubmit} className="space-y-4">
+            <div className="p-3.5 rounded-2xl bg-amber-950/30 border border-amber-500/40 text-amber-200 space-y-1.5">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-bold text-white">
+                  Recuperación de la Cuenta grupobassify@gmail.com
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Para restablecer la clave del administrador oficial, ingresa el PIN Maestro de seguridad.
+              </p>
+              <p className="text-[10px] text-amber-300 font-mono">
+                PIN Maestro de fábrica: <strong className="bg-black/60 px-1.5 py-0.5 rounded text-white">{DEFAULT_ADMIN_RECOVERY_PIN}</strong>
               </p>
             </div>
-          </div>
 
-          {currentUser.email.toLowerCase() === ADMIN_EMAIL.toLowerCase() ? (
-            <span className="text-[10px] font-mono bg-blue-600 text-white font-bold px-2 py-0.5 rounded">
-              ADMIN
-            </span>
-          ) : (
-            <span className="text-[10px] font-mono bg-slate-800 text-slate-400 px-2 py-0.5 rounded">
-              USUARIO
-            </span>
-          )}
-        </div>
-
-        {/* Quick Profiles Switch */}
-        <div className="space-y-2 mb-5">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            Acceso Rápido de Prueba:
-          </p>
-
-          <button
-            onClick={handleSelectAdmin}
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-[#00439c]/90 to-[#0055cb]/90 hover:brightness-110 text-white transition-all shadow-md text-left"
-          >
-            <div className="flex items-center gap-2.5">
-              <ShieldCheck className="w-5 h-5 text-blue-200" />
-              <div>
-                <p className="text-xs font-bold leading-none">Acceder como Administrador</p>
-                <p className="text-[10px] text-blue-200 font-mono mt-0.5">grupobassify@gmail.com</p>
-              </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                PIN Maestro de Seguridad *
+              </label>
+              <input
+                type="text"
+                required
+                value={recoveryPin}
+                onChange={e => setRecoveryPin(e.target.value)}
+                placeholder="Ingresa el PIN de 4 dígitos..."
+                className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-amber-400 font-mono tracking-widest text-center"
+              />
             </div>
-            <ArrowRight className="w-4 h-4 text-blue-200" />
-          </button>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Nueva Contraseña de Administrador *
+              </label>
+              <input
+                type="password"
+                required
+                value={recoveryNewPassword}
+                onChange={e => setRecoveryNewPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres..."
+                className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-amber-400 font-mono"
+              />
+            </div>
+
+            {recoveryError && (
+              <div className="p-3 rounded-xl bg-red-950/50 border border-red-500/40 text-red-200 text-xs">
+                {recoveryError}
+              </div>
+            )}
+
+            {recoverySuccess && (
+              <div className="p-3 rounded-xl bg-emerald-950/50 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{recoverySuccess}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2"
+            >
+              <Lock className="w-4 h-4" />
+              <span>{isLoading ? 'Restableciendo...' : 'Restablecer Clave de Administrador'}</span>
+            </button>
+          </form>
+        )}
+
+        {/* Guest Mode or current user info footer */}
+        <div className="mt-5 pt-4 border-t border-[#16274a] flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2 text-slate-400 truncate max-w-[220px]">
+            <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+            <span className="truncate">Actual: <strong className="text-white">{currentUser.name}</strong></span>
+          </div>
 
           <button
-            onClick={handleSelectGuest}
-            className="w-full flex items-center justify-between p-3 rounded-xl bg-[#0e1a34] hover:bg-[#142345] border border-[#1b2f56] text-slate-300 hover:text-white transition-all text-left"
+            type="button"
+            onClick={() => {
+              setIsAuthModalOpen(false);
+            }}
+            className="text-xs text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-800 px-3 py-1.5 rounded-xl transition-colors font-medium"
           >
-            <div className="flex items-center gap-2.5">
-              <UserCheck className="w-5 h-5 text-slate-400" />
-              <div>
-                <p className="text-xs font-semibold leading-none">Acceder como Usuario Estándar</p>
-                <p className="text-[10px] text-slate-400 font-mono mt-0.5">usuario_gamer@bassify.net</p>
-              </div>
-            </div>
-            <ArrowRight className="w-4 h-4 text-slate-500" />
+            Continuar Navegando
           </button>
         </div>
-
-        {/* Custom Email Login Form */}
-        <form onSubmit={handleCustomLogin} className="pt-4 border-t border-[#18294a] space-y-3">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-            O introduce cualquier otro correo:
-          </p>
-
-          <div>
-            <input
-              type="email"
-              required
-              value={customEmail}
-              onChange={e => setCustomEmail(e.target.value)}
-              placeholder="tu_correo@ejemplo.com"
-              className="w-full bg-[#070e1c] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400 font-mono"
-            />
-          </div>
-
-          <div>
-            <input
-              type="text"
-              value={customName}
-              onChange={e => setCustomName(e.target.value)}
-              placeholder="Nombre de usuario (opcional)"
-              className="w-full bg-[#070e1c] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md"
-          >
-            Iniciar Sesión con este Correo
-          </button>
-        </form>
       </div>
     </div>
   );

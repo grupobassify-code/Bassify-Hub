@@ -62,6 +62,23 @@ export interface UserProfile {
   bio?: string;
   joinedDate?: string;
   bookmarks?: string[]; // Array of content item IDs
+  isGuest?: boolean;
+}
+
+export interface UserAccount {
+  email: string;
+  name: string;
+  passwordHash: string;
+  avatar: string;
+  role: 'admin' | 'user';
+  joinedDate: string;
+  bio?: string;
+}
+
+export interface AuthSettings {
+  adminEmail: string;
+  adminPassword: string;
+  adminRecoveryPin: string;
 }
 
 export interface ChatMessage {

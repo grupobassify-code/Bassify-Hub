@@ -17,6 +17,8 @@ import {
   Bookmark,
   UserCheck,
   X,
+  Lock,
+  LogOut,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { SectionType } from '../types';
@@ -30,6 +32,8 @@ export const Sidebar: React.FC = () => {
     channels,
     currentUser,
     isAdmin,
+    isGuest,
+    logout,
     setIsUploadModalOpen,
     setIsTableModalOpen,
     setIsAuthModalOpen,
@@ -389,16 +393,42 @@ export const Sidebar: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1 text-slate-400 shrink-0">
-          <button
-            onClick={() => {
-              setIsAuthModalOpen(true);
-              if (isMobileView) setIsMobileSidebarOpen(false);
-            }}
-            className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-            title="Cambiar cuenta o iniciar sesión"
-          >
-            <UserCheck className="w-4 h-4" />
-          </button>
+          {isGuest ? (
+            <button
+              onClick={() => {
+                setIsAuthModalOpen(true);
+                if (isMobileView) setIsMobileSidebarOpen(false);
+              }}
+              className="px-2.5 py-1.5 bg-[#00439c] hover:bg-blue-600 text-white rounded-xl text-[11px] font-bold transition-all shadow-md flex items-center gap-1 cursor-pointer"
+              title="Iniciar sesión"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Entrar</span>
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => {
+                  setIsAuthModalOpen(true);
+                  if (isMobileView) setIsMobileSidebarOpen(false);
+                }}
+                className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                title="Cambiar cuenta o iniciar sesión"
+              >
+                <UserCheck className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => {
+                  logout();
+                  if (isMobileView) setIsMobileSidebarOpen(false);
+                }}
+                className="p-2 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
+                title="Cerrar sesión (volver a Invitado)"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
