@@ -78,7 +78,7 @@ interface AppContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (email: string, name: string, password: string, avatar?: string) => Promise<{ success: boolean; error?: string }>;
   changeAdminPassword: (currentPassword: string, newPassword: string, recoveryPin?: string) => Promise<{ success: boolean; error?: string }>;
-  resetAdminPassword: (recoveryPin: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  resetAdminPassword: (recoveryPin: string, newPassword: string, email?: string) => Promise<{ success: boolean; error?: string }>;
   loginAs: (email: string, name?: string) => void;
   logout: () => void;
   addItem: (item: Omit<ContentItem, 'id' | 'createdAt' | 'comments' | 'likes' | 'likedBy'>) => void;
@@ -468,35 +468,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Reset Admin Password using master PIN
+  // Reset Account / Admin Password using recovery PIN
   const resetAdminPassword = async (
     recoveryPin: string,
-    newPassword: string
+    newPassword: string,
+    email?: string
   ): Promise<{ success: boolean; error?: string }> => {
+    const targetEmail = (email || ADMIN_EMAIL).trim().toLowerCase();
     try {
       const res = await fetch('/api/auth/reset-admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recoveryPin, newPassword }),
+        body: JSON.stringify({ recoveryPin, newPassword, email: targetEmail }),
       });
       const data = await res.json();
       if (!res.ok) {
         return { success: false, error: data.error || 'Error al restablecer la contraseña.' };
       }
-      const localAuth = getLocalAuth();
-      localAuth.adminPassword = newPassword.trim();
-      saveLocalAuth(localAuth);
+      if (targetEmail === ADMIN_EMAIL.toLowerCase()) {
+        const localAuth = getLocalAuth();
+        localAuth.adminPassword = newPassword.trim();
+        saveLocalAuth(localAuth);
+      } else {
+        const localAuth = getLocalAuth();
+        const uIdx = (localAuth.users || []).findIndex((u: any) => u.email.toLowerCase() === targetEmail);
+        if (uIdx !== -1) {
+          localAuth.users[uIdx].password = newPassword.trim();
+          saveLocalAuth(localAuth);
+        }
+      }
       showToast('¡Contraseña restablecida con éxito!');
       return { success: true };
     } catch {
       const localAuth = getLocalAuth();
-      if (recoveryPin !== localAuth.adminRecoveryPin) {
-        return { success: false, error: 'El PIN maestro de recuperación no coincide.' };
+      if (targetEmail === ADMIN_EMAIL.toLowerCase()) {
+        if (recoveryPin !== localAuth.adminRecoveryPin) {
+          return { success: false, error: 'El PIN de seguridad de recuperación es incorrecto.' };
+        }
+        localAuth.adminPassword = newPassword.trim();
+        saveLocalAuth(localAuth);
+        showToast('¡Contraseña restablecida con éxito!');
+        return { success: true };
+      } else {
+        const uIdx = (localAuth.users || []).findIndex((u: any) => u.email.toLowerCase() === targetEmail);
+        if (uIdx !== -1) {
+          localAuth.users[uIdx].password = newPassword.trim();
+          saveLocalAuth(localAuth);
+          showToast('¡Contraseña restablecida con éxito!');
+          return { success: true };
+        }
+        return { success: false, error: 'No se encontró una cuenta con ese correo.' };
       }
-      localAuth.adminPassword = newPassword.trim();
-      saveLocalAuth(localAuth);
-      showToast('¡Contraseña restablecida con éxito!');
-      return { success: true };
     }
   };
 

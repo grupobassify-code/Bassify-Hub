@@ -218,26 +218,43 @@ async function startServer() {
     return res.json({ success: true, message: '¡Contraseña de administrador actualizada con éxito!' });
   });
 
-  // Reset Admin Password using PIN
+  // Reset Admin / Account Password using PIN
   app.post('/api/auth/reset-admin', (req: Request, res: Response) => {
     const db = readDatabase();
-    const { recoveryPin, newPassword } = req.body;
+    const { recoveryPin, newPassword, email } = req.body;
     const auth = db.auth || defaultDb.auth;
-
-    if (!recoveryPin || recoveryPin !== auth.adminRecoveryPin) {
-      return res.status(401).json({ error: 'PIN maestro de recuperación incorrecto.' });
-    }
 
     if (!newPassword || newPassword.trim().length < 6) {
       return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres.' });
     }
 
-    db.auth = {
-      ...auth,
-      adminPassword: newPassword.trim(),
-    };
-    writeDatabase(db);
-    return res.json({ success: true, message: 'Contraseña restablecida exitosamente.' });
+    const cleanEmail = email ? email.trim().toLowerCase() : auth.adminEmail.toLowerCase();
+
+    // If it's the admin email
+    if (cleanEmail === auth.adminEmail.toLowerCase()) {
+      if (!recoveryPin || recoveryPin.trim() !== auth.adminRecoveryPin) {
+        return res.status(401).json({ error: 'El PIN o clave de seguridad de recuperación es incorrecto.' });
+      }
+
+      db.auth = {
+        ...auth,
+        adminPassword: newPassword.trim(),
+      };
+      writeDatabase(db);
+      return res.json({ success: true, message: 'Contraseña restablecida exitosamente.' });
+    }
+
+    // If it's a registered user
+    const users = auth.users || [];
+    const userIndex = users.findIndex((u: any) => u.email.toLowerCase() === cleanEmail);
+    if (userIndex !== -1) {
+      users[userIndex].password = newPassword.trim();
+      db.auth = { ...auth, users };
+      writeDatabase(db);
+      return res.json({ success: true, message: 'Contraseña restablecida exitosamente.' });
+    }
+
+    return res.status(404).json({ error: 'No se encontró ninguna cuenta asociada a este correo electrónico.' });
   });
 
   // ==========================================

@@ -1,0 +1,27 @@
+{
+  "version": "1.0.0",
+  "items": [],
+  "reports": [],
+  "chatMessages": [],
+  "moderationSettings": {
+    "autoCensorProfanity": true,
+    "blockOffensiveSubmission": false,
+    "customBadWords": []
+  },
+  "auth": {
+    "adminEmail": "grupobassify@gmail.com",
+    "adminPassword": "BassifyAdmin2026!",
+    "adminRecoveryPin": "9824",
+    "users": [
+      {
+        "email": "testgamer@bassify.net",
+        "name": "TestGamer",
+        "password": "gamerpassword123",
+        "avatar": "",
+        "role": "user",
+        "joinedDate": "octubre de 2026",
+        "bio": "Miembro de la comunidad Bassify Hub."
+      }
+    ]
+  }
+}

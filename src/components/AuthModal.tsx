@@ -16,7 +16,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD, DEFAULT_ADMIN_RECOVERY_PIN } from '../data/initialData';
+import { ADMIN_EMAIL } from '../data/initialData';
 import { DEFAULT_FIGURE_AVATARS } from '../utils/avatars';
 
 export const AuthModal: React.FC = () => {
@@ -38,9 +38,12 @@ export const AuthModal: React.FC = () => {
   const [regAvatar, setRegAvatar] = useState(DEFAULT_FIGURE_AVATARS[1].url);
   const [regError, setRegError] = useState<string | null>(null);
 
-  // Recovery states
+  // Recovery states - Strictly protected, no default credentials shown
+  const [recoveryEmail, setRecoveryEmail] = useState('');
   const [recoveryPin, setRecoveryPin] = useState('');
   const [recoveryNewPassword, setRecoveryNewPassword] = useState('');
+  const [recoveryConfirmPassword, setRecoveryConfirmPassword] = useState('');
+  const [showRecoveryPass, setShowRecoveryPass] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [recoverySuccess, setRecoverySuccess] = useState<string | null>(null);
 
@@ -84,7 +87,7 @@ export const AuthModal: React.FC = () => {
     }
 
     if (regEmail.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
-      setRegError('El correo oficial grupobassify@gmail.com solo puede ser accedido en la pestaña Iniciar Sesión.');
+      setRegError('Este correo oficial solo puede ser accedido en la pestaña Iniciar Sesión con su contraseña.');
       return;
     }
 
@@ -105,8 +108,8 @@ export const AuthModal: React.FC = () => {
     setRecoveryError(null);
     setRecoverySuccess(null);
 
-    if (!recoveryPin.trim() || !recoveryNewPassword) {
-      setRecoveryError('Ingresa el PIN de recuperación maestro y tu nueva contraseña.');
+    if (!recoveryEmail.trim() || !recoveryPin.trim() || !recoveryNewPassword) {
+      setRecoveryError('Por favor completa el correo, el PIN de seguridad y tu nueva contraseña.');
       return;
     }
 
@@ -115,25 +118,28 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
+    if (recoveryNewPassword !== recoveryConfirmPassword) {
+      setRecoveryError('Las nuevas contraseñas no coinciden.');
+      return;
+    }
+
     setIsLoading(true);
-    const res = await resetAdminPassword(recoveryPin.trim(), recoveryNewPassword);
+    const res = await resetAdminPassword(recoveryPin.trim(), recoveryNewPassword, recoveryEmail.trim());
     setIsLoading(false);
 
     if (res.success) {
-      setRecoverySuccess('¡Contraseña de administrador actualizada con éxito! Ya puedes iniciar sesión.');
-      setLoginEmail(ADMIN_EMAIL);
+      setRecoverySuccess('¡Contraseña restablecida con éxito! Ya puedes iniciar sesión.');
+      setLoginEmail(recoveryEmail.trim());
       setLoginPassword(recoveryNewPassword);
+      setRecoveryPin('');
+      setRecoveryNewPassword('');
+      setRecoveryConfirmPassword('');
       setTimeout(() => {
         setActiveTab('login');
-      }, 1500);
+      }, 1600);
     } else {
-      setRecoveryError(res.error || 'PIN de recuperación incorrecto.');
+      setRecoveryError(res.error || 'Código o PIN de recuperación incorrecto.');
     }
-  };
-
-  const autofillAdmin = () => {
-    setLoginEmail(ADMIN_EMAIL);
-    setLoginError(null);
   };
 
   return (
@@ -202,10 +208,10 @@ export const AuthModal: React.FC = () => {
             }}
             className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1 ${
               activeTab === 'recovery'
-                ? 'bg-amber-600/30 text-amber-300 border border-amber-500/40 shadow-sm'
+                ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40 shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
-            title="Recuperar o restablecer contraseña del Admin"
+            title="Recuperar contraseña o acceso a tu cuenta"
           >
             <Lock className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Recuperar</span>
@@ -215,39 +221,40 @@ export const AuthModal: React.FC = () => {
         {/* TAB 1: INICIAR SESIÓN */}
         {activeTab === 'login' && (
           <form onSubmit={handleLoginSubmit} className="space-y-4">
-            {/* Admin Shield Notice if user types grupobassify@gmail.com */}
+            {/* Notice if user enters protected admin account */}
             {isTryingAdmin ? (
               <div className="p-3.5 rounded-2xl bg-blue-950/60 border border-blue-500/40 text-blue-200 space-y-1.5 shadow-inner">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span className="text-xs font-bold text-white">
-                    Cuenta Oficial de Administrador Protegida
+                    Cuenta de Administrador Protegida
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  Solo tú con la contraseña maestra puedes ingresar a <strong className="text-white font-mono">{ADMIN_EMAIL}</strong>. Nadie más puede acceder sin esta clave.
+                  Esta cuenta oficial está protegida. Ingresa tu contraseña confidencial de acceso.
                 </p>
-                <div className="pt-1 flex items-center justify-between text-[10px] text-blue-300">
-                  <span>Clave inicial: <code className="bg-black/50 px-1.5 py-0.5 rounded text-amber-300 font-mono">{DEFAULT_ADMIN_PASSWORD}</code></span>
+                <div className="pt-1 flex items-center justify-end text-[11px]">
                   <button
                     type="button"
-                    onClick={() => setActiveTab('recovery')}
+                    onClick={() => {
+                      setRecoveryEmail(loginEmail);
+                      setActiveTab('recovery');
+                    }}
                     className="text-blue-300 hover:text-white underline font-medium"
                   >
-                    ¿Olvidaste la clave?
+                    ¿Olvidaste tu contraseña?
                   </button>
                 </div>
               </div>
             ) : (
               <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>¿Eres el administrador oficial?</span>
+                <span>Ingresa con tu correo y contraseña</span>
                 <button
                   type="button"
-                  onClick={autofillAdmin}
-                  className="text-blue-400 hover:text-blue-300 font-bold underline flex items-center gap-1"
+                  onClick={() => setActiveTab('recovery')}
+                  className="text-blue-400 hover:text-blue-300 underline font-medium"
                 >
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Soy grupobassify@gmail.com</span>
+                  ¿Olvidaste tu clave?
                 </button>
               </div>
             )}
@@ -264,7 +271,7 @@ export const AuthModal: React.FC = () => {
                   required
                   value={loginEmail}
                   onChange={e => setLoginEmail(e.target.value)}
-                  placeholder="ejemplo@correo.com o grupobassify@gmail.com"
+                  placeholder="tu_correo@ejemplo.com"
                   className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl pl-10 pr-3.5 py-2.5 focus:outline-none focus:border-blue-400"
                 />
               </div>
@@ -441,55 +448,104 @@ export const AuthModal: React.FC = () => {
           </form>
         )}
 
-        {/* TAB 3: RECUPERACIÓN ADMIN */}
+        {/* TAB 3: RECUPERACIÓN DE CUENTA */}
         {activeTab === 'recovery' && (
           <form onSubmit={handleRecoverySubmit} className="space-y-4">
-            <div className="p-3.5 rounded-2xl bg-amber-950/30 border border-amber-500/40 text-amber-200 space-y-1.5">
+            <div className="p-3.5 rounded-2xl bg-[#0b1730] border border-blue-500/30 text-blue-200 space-y-1">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-amber-400" />
+                <KeyRound className="w-4 h-4 text-blue-400" />
                 <span className="text-xs font-bold text-white">
-                  Recuperación de la Cuenta grupobassify@gmail.com
+                  Restablecer Contraseña de Acceso
                 </span>
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
-                Para restablecer la clave del administrador oficial, ingresa el PIN Maestro de seguridad.
-              </p>
-              <p className="text-[10px] text-amber-300 font-mono">
-                PIN Maestro de fábrica: <strong className="bg-black/60 px-1.5 py-0.5 rounded text-white">{DEFAULT_ADMIN_RECOVERY_PIN}</strong>
+                Ingresa el correo electrónico de tu cuenta y tu PIN o clave de seguridad privada para configurar una nueva contraseña.
               </p>
             </div>
 
+            {/* Email of account to recover */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                PIN Maestro de Seguridad *
+                Correo Electrónico de la Cuenta *
               </label>
-              <input
-                type="text"
-                required
-                value={recoveryPin}
-                onChange={e => setRecoveryPin(e.target.value)}
-                placeholder="Ingresa el PIN de 4 dígitos..."
-                className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-amber-400 font-mono tracking-widest text-center"
-              />
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type="email"
+                  required
+                  value={recoveryEmail}
+                  onChange={e => setRecoveryEmail(e.target.value)}
+                  placeholder="tu_correo@ejemplo.com"
+                  className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl pl-10 pr-3.5 py-2.5 focus:outline-none focus:border-blue-400"
+                />
+              </div>
             </div>
 
+            {/* Private Security PIN */}
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                Nueva Contraseña de Administrador *
+                PIN o Clave Secreta de Seguridad *
               </label>
-              <input
-                type="password"
-                required
-                value={recoveryNewPassword}
-                onChange={e => setRecoveryNewPassword(e.target.value)}
-                placeholder="Mínimo 6 caracteres..."
-                className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-amber-400 font-mono"
-              />
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type="password"
+                  required
+                  value={recoveryPin}
+                  onChange={e => setRecoveryPin(e.target.value)}
+                  placeholder="Ingresa tu PIN de seguridad..."
+                  className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl pl-10 pr-3.5 py-2.5 focus:outline-none focus:border-blue-400 font-mono tracking-wider"
+                />
+              </div>
+            </div>
+
+            {/* New Password */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Nueva Contraseña *
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type={showRecoveryPass ? 'text' : 'password'}
+                  required
+                  value={recoveryNewPassword}
+                  onChange={e => setRecoveryNewPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres..."
+                  className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl pl-10 pr-10 py-2.5 focus:outline-none focus:border-blue-400 font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowRecoveryPass(!showRecoveryPass)}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-200"
+                >
+                  {showRecoveryPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm New Password */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                Confirmar Nueva Contraseña *
+              </label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type={showRecoveryPass ? 'text' : 'password'}
+                  required
+                  value={recoveryConfirmPassword}
+                  onChange={e => setRecoveryConfirmPassword(e.target.value)}
+                  placeholder="Repite tu nueva contraseña..."
+                  className="w-full bg-[#060c18] border border-[#1b2f56] text-sm text-white rounded-xl pl-10 pr-3.5 py-2.5 focus:outline-none focus:border-blue-400 font-mono"
+                />
+              </div>
             </div>
 
             {recoveryError && (
-              <div className="p-3 rounded-xl bg-red-950/50 border border-red-500/40 text-red-200 text-xs">
-                {recoveryError}
+              <div className="p-3 rounded-xl bg-red-950/50 border border-red-500/40 text-red-200 text-xs flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span>{recoveryError}</span>
               </div>
             )}
 
@@ -503,10 +559,10 @@ export const AuthModal: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-3 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#003791] to-[#0070d1] hover:brightness-110 text-white text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Lock className="w-4 h-4" />
-              <span>{isLoading ? 'Restableciendo...' : 'Restablecer Clave de Administrador'}</span>
+              <span>{isLoading ? 'Restableciendo...' : 'Restablecer Contraseña'}</span>
             </button>
           </form>
         )}

@@ -14,6 +14,8 @@ import {
   Camera,
   Link as LinkIcon,
   Sparkles,
+  FolderOpen,
+  Images,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ItemType, ItemStatus } from '../types';
@@ -57,6 +59,7 @@ export const UploadModal: React.FC = () => {
 
   const logoFileRef = useRef<HTMLInputElement>(null);
   const bannerFileRef = useRef<HTMLInputElement>(null);
+  const screenshotsFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (editingItem) {
@@ -105,7 +108,7 @@ export const UploadModal: React.FC = () => {
     setEditingItem(null);
   };
 
-  // Direct local file upload for Logo (PC or Mobile)
+  // Direct local file upload for Logo (PC or Mobile Photo Library / Files)
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -115,8 +118,8 @@ export const UploadModal: React.FC = () => {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('La imagen debe pesar menos de 5 MB.');
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('La imagen debe pesar menos de 10 MB.');
       return;
     }
 
@@ -124,10 +127,11 @@ export const UploadModal: React.FC = () => {
     reader.onload = ev => {
       if (ev.target?.result) {
         setLogoUrl(ev.target.result as string);
-        showToast('¡Logo cargado exitosamente!');
+        showToast('¡Logo cargado exitosamente desde tu dispositivo!');
       }
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   // Direct local file upload for Banner (PC or Mobile)
@@ -140,8 +144,8 @@ export const UploadModal: React.FC = () => {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      showToast('La imagen debe pesar menos de 5 MB.');
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('La imagen debe pesar menos de 10 MB.');
       return;
     }
 
@@ -153,6 +157,41 @@ export const UploadModal: React.FC = () => {
       }
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Direct local file upload for Screenshots / Content Gallery (PC or Mobile Photo Library)
+  const handleScreenshotsUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const fileList = Array.from(files);
+    const validFiles = fileList.filter(f => f.type.startsWith('image/'));
+
+    if (validFiles.length === 0) {
+      showToast('Por favor selecciona archivos de imagen válidos.');
+      return;
+    }
+
+    let loaded = 0;
+    const newImgs: string[] = [];
+
+    validFiles.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        if (ev.target?.result) {
+          newImgs.push(ev.target.result as string);
+        }
+        loaded++;
+        if (loaded === validFiles.length) {
+          setScreenshots(prev => [...prev, ...newImgs]);
+          showToast(`¡${newImgs.length} captura(s) agregada(s) desde tu dispositivo!`);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    e.target.value = '';
   };
 
   const handleAddScreenshot = () => {
@@ -435,7 +474,7 @@ export const UploadModal: React.FC = () => {
               </div>
             </div>
 
-            {/* 3. LOGO 512x512 PIXELES (Upload o Presets) */}
+            {/* 3. LOGO 512x512 PIXELES (Upload desde Fototeca/Archivos o Presets) */}
             <div className="p-4 rounded-2xl bg-[#0b162c] border border-[#1b2e56] space-y-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -444,7 +483,7 @@ export const UploadModal: React.FC = () => {
                     Logo del Contenido (512 x 512 px) *
                   </h4>
                   <p className="text-[11px] text-slate-400">
-                    Sube desde tu dispositivo o selecciona un preset online
+                    Carga desde la fototeca o archivos de tu dispositivo móvil / PC
                   </p>
                 </div>
                 <span className="text-[10px] font-mono bg-blue-900/40 text-blue-300 px-2 py-0.5 rounded border border-blue-800/40">
@@ -452,50 +491,64 @@ export const UploadModal: React.FC = () => {
                 </span>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-start gap-4">
-                <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden border-2 border-dashed border-blue-500/50 bg-[#060c18] shrink-0 flex items-center justify-center shadow-inner">
+              <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+                {/* Logo Preview with click to upload */}
+                <div
+                  onClick={() => logoFileRef.current?.click()}
+                  className="relative w-28 h-28 rounded-2xl overflow-hidden border-2 border-dashed border-blue-500/60 hover:border-blue-400 bg-[#060c18] shrink-0 flex items-center justify-center shadow-inner cursor-pointer group"
+                  title="Toca para elegir foto o archivo de tu dispositivo"
+                >
                   <SafeImage
                     src={logoUrl}
                     fallbackTitle={title || 'Logo'}
                     itemType={type}
                     alt="Logo Preview"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                   />
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-semibold gap-1 p-1 text-center">
+                    <Camera className="w-5 h-5 text-blue-300" />
+                    <span>Cambiar Imagen</span>
+                  </div>
                   <span className="absolute bottom-1 right-1 text-[8px] bg-black/80 text-white font-mono px-1 rounded">
                     512×512
                   </span>
                 </div>
 
-                <div className="flex-1 w-full space-y-2">
+                <div className="flex-1 w-full space-y-2.5">
+                  {/* File Upload Trigger */}
+                  <input
+                    type="file"
+                    ref={logoFileRef}
+                    onChange={handleLogoUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => logoFileRef.current?.click()}
+                      className="px-4 py-2.5 bg-gradient-to-r from-[#003791] to-[#0062b8] hover:brightness-110 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-md cursor-pointer"
+                    >
+                      <FolderOpen className="w-4 h-4" />
+                      <Camera className="w-4 h-4" />
+                      <span>Elegir Logo de Fototeca o Archivos</span>
+                    </button>
+                  </div>
+
+                  {/* URL Input as alternative */}
                   <div className="flex gap-2">
                     <input
                       type="text"
                       value={logoUrl}
                       onChange={e => setLogoUrl(e.target.value)}
-                      placeholder="URL de la imagen del Logo..."
+                      placeholder="O ingresa URL de la imagen del Logo..."
                       className="flex-1 bg-[#081022] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400 font-mono"
                     />
-
-                    {/* Local File Upload Button */}
-                    <input
-                      type="file"
-                      ref={logoFileRef}
-                      onChange={handleLogoUpload}
-                      accept="image/*"
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => logoFileRef.current?.click()}
-                      className="px-3 py-2 bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-500/40 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shrink-0"
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Subir Foto</span>
-                    </button>
                   </div>
 
                   {/* Preset Quick Selectors */}
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
                     <span className="text-[10px] text-slate-400">Presets online listos:</span>
                     {CONTENT_IMAGE_PRESETS.slice(0, 4).map((preset, idx) => (
                       <button
@@ -519,18 +572,18 @@ export const UploadModal: React.FC = () => {
 
             {/* 4. BANNER HORIZONTAL (16:9) & LINK DE DESCARGA */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <div className="flex items-center justify-between mb-1">
+              <div className="p-3 rounded-2xl bg-[#0b162c] border border-[#1b2e56] space-y-2">
+                <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-slate-300">
                     Banner Horizontal (16:9)
                   </label>
                   <button
                     type="button"
                     onClick={() => bannerFileRef.current?.click()}
-                    className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                    className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 cursor-pointer"
                   >
                     <Camera className="w-3 h-3" />
-                    <span>Subir de PC/Móvil</span>
+                    <span>Fototeca / Archivos</span>
                   </button>
                 </div>
                 <input
@@ -540,26 +593,39 @@ export const UploadModal: React.FC = () => {
                   accept="image/*"
                   className="hidden"
                 />
+                <button
+                  type="button"
+                  onClick={() => bannerFileRef.current?.click()}
+                  className="w-full py-2 px-3 bg-[#081022] hover:bg-[#0d1b38] border border-[#1b2e56] hover:border-blue-500/50 rounded-xl text-xs text-blue-200 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <FolderOpen className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Subir Banner desde el dispositivo</span>
+                </button>
                 <input
                   type="text"
                   value={bannerUrl}
                   onChange={e => setBannerUrl(e.target.value)}
-                  placeholder="URL del Banner 16:9 o sube tu archivo..."
-                  className="w-full bg-[#0b162c] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400 font-mono"
+                  placeholder="O pega URL de Banner 16:9..."
+                  className="w-full bg-[#081022] border border-[#1b2e56] text-xs text-white rounded-xl p-2 focus:outline-none focus:border-blue-400 font-mono"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <div className="p-3 rounded-2xl bg-[#0b162c] border border-[#1b2e56] space-y-2">
+                <label className="block text-xs font-semibold text-slate-300">
                   Link de Descarga / Web Oficial *
                 </label>
-                <input
-                  type="url"
-                  value={downloadUrl}
-                  onChange={e => setDownloadUrl(e.target.value)}
-                  placeholder="https://bassify.hub/..."
-                  className="w-full bg-[#0b162c] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400 font-mono"
-                />
+                <div className="pt-1">
+                  <input
+                    type="url"
+                    value={downloadUrl}
+                    onChange={e => setDownloadUrl(e.target.value)}
+                    placeholder="https://bassify.hub/..."
+                    className="w-full bg-[#081022] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400 font-mono"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1.5">
+                    Enlace de descarga o destino web para el botón de acción en la tienda
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -649,43 +715,103 @@ export const UploadModal: React.FC = () => {
               />
             </div>
 
-            {/* 7. CAPTURAS DE PANTALLA */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
-                Capturas de Pantalla (Screenshots)
-              </label>
-              <div className="flex gap-2 mb-2">
-                <input
-                  type="text"
-                  value={screenshotInput}
-                  onChange={e => setScreenshotInput(e.target.value)}
-                  placeholder="URL de la captura de pantalla..."
-                  className="flex-1 bg-[#0b162c] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400 font-mono"
-                />
+            {/* 7. CAPTURAS DE PANTALLA Y GALERÍA (Archivos / Fototeca del Dispositivo) */}
+            <div className="p-4 rounded-2xl bg-[#0b162c] border border-[#1b2e56] space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-blue-300 flex items-center gap-1.5">
+                    <Images className="w-4 h-4 text-blue-400" />
+                    Capturas de Pantalla y Galería de Contenido *
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Sube imágenes de muestra desde la fototeca o archivos de tu celular / PC
+                  </p>
+                </div>
+                <span className="text-[10px] font-mono bg-blue-900/40 text-blue-300 px-2 py-0.5 rounded border border-blue-800/40">
+                  {screenshots.length} {screenshots.length === 1 ? 'captura' : 'capturas'}
+                </span>
+              </div>
+
+              {/* Hidden file input for multi-selection */}
+              <input
+                type="file"
+                ref={screenshotsFileRef}
+                onChange={handleScreenshotsUpload}
+                accept="image/*"
+                multiple
+                className="hidden"
+              />
+
+              {/* Dropzone & Direct Upload Button */}
+              <div
+                onClick={() => screenshotsFileRef.current?.click()}
+                className="group border-2 border-dashed border-[#1b3464] hover:border-blue-400 rounded-2xl p-4 text-center cursor-pointer bg-[#071022] hover:bg-[#0d1c3a] transition-all flex flex-col items-center justify-center gap-2"
+              >
+                <div className="p-3 rounded-2xl bg-blue-600/20 text-blue-400 group-hover:scale-110 transition-transform flex items-center gap-2">
+                  <FolderOpen className="w-5 h-5" />
+                  <Camera className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-white group-hover:text-blue-300 transition-colors">
+                    Toca aquí para elegir capturas desde Fototeca o Archivos
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Puedes seleccionar una o varias imágenes al mismo tiempo (JPG, PNG, WEBP, hasta 10 MB)
+                  </p>
+                </div>
                 <button
                   type="button"
-                  onClick={handleAddScreenshot}
-                  className="px-4 py-2.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 text-xs font-semibold transition-colors flex items-center gap-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    screenshotsFileRef.current?.click();
+                  }}
+                  className="mt-1 px-4 py-2 bg-[#00439c] hover:bg-blue-600 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>Añadir</span>
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Seleccionar Fotos del Dispositivo</span>
                 </button>
               </div>
 
+              {/* Optional URL addition */}
+              <div className="pt-1">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={screenshotInput}
+                    onChange={e => setScreenshotInput(e.target.value)}
+                    placeholder="O añade una URL web directa de imagen..."
+                    className="flex-1 bg-[#071022] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddScreenshot}
+                    className="px-3.5 py-2 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 text-xs font-semibold transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Añadir URL</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Screenshots Gallery Preview */}
               {screenshots.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
                   {screenshots.map((url, i) => (
-                    <div key={i} className="relative aspect-video rounded-xl overflow-hidden group border border-slate-700">
+                    <div key={i} className="relative aspect-video rounded-xl overflow-hidden group border border-[#1b3464] bg-black/60 shadow-md">
                       <SafeImage
                         src={url}
                         alt={`Captura ${i + 1}`}
                         itemType={type}
                         className="w-full h-full object-cover"
                       />
+                      <span className="absolute bottom-1 left-1 bg-black/75 text-[10px] text-slate-300 px-1.5 py-0.5 rounded font-mono">
+                        #{i + 1}
+                      </span>
                       <button
                         type="button"
                         onClick={() => handleRemoveScreenshot(i)}
-                        className="absolute top-1 right-1 p-1 bg-black/80 hover:bg-red-600 text-white rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute top-1 right-1 p-1 bg-rose-600/90 hover:bg-rose-600 text-white rounded-lg shadow transition-opacity cursor-pointer"
+                        title="Eliminar captura"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>

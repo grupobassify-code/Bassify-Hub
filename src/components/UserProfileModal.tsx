@@ -19,10 +19,17 @@ import {
   Sparkles,
   Link as LinkIcon,
   RotateCcw,
+  Lock,
+  KeyRound,
+  ShieldAlert,
+  LogOut,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ContentItem } from '../types';
 import { DEFAULT_FIGURE_AVATARS, DEFAULT_ADMIN_AVATAR, DEFAULT_GUEST_AVATAR } from '../utils/avatars';
+import { ADMIN_EMAIL } from '../data/initialData';
 
 export const UserProfileModal: React.FC = () => {
   const {
@@ -30,6 +37,10 @@ export const UserProfileModal: React.FC = () => {
     setIsProfileOpen,
     currentUser,
     isAdmin,
+    isGuest,
+    logout,
+    setIsAuthModalOpen,
+    changeAdminPassword,
     items,
     setSelectedItem,
     toggleBookmark,
@@ -38,7 +49,17 @@ export const UserProfileModal: React.FC = () => {
     showToast,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'activity' | 'bookmarks' | 'settings'>('activity');
+  const [activeTab, setActiveTab] = useState<'activity' | 'bookmarks' | 'settings' | 'security'>('activity');
+
+  // Password change states
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [recoveryPin, setRecoveryPin] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [passError, setPassError] = useState<string | null>(null);
+  const [passSuccess, setPassSuccess] = useState<string | null>(null);
+  const [isChangingPass, setIsChangingPass] = useState(false);
 
   // Form states for account settings
   const [name, setName] = useState(currentUser.name);
@@ -118,6 +139,54 @@ export const UserProfileModal: React.FC = () => {
     const defaultAv = isAdmin ? DEFAULT_ADMIN_AVATAR : DEFAULT_GUEST_AVATAR;
     setAvatar(defaultAv);
     showToast('Foto restablecida a figura predeterminada.');
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPassError(null);
+    setPassSuccess(null);
+
+    if (newPassword.length < 6) {
+      setPassError('La nueva contraseña debe tener un mínimo de 6 caracteres.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPassError('Las contraseñas no coinciden.');
+      return;
+    }
+
+    if (isAdmin) {
+      if (!currentPassword && !recoveryPin) {
+        setPassError('Ingresa tu contraseña actual o el PIN de recuperación.');
+        return;
+      }
+
+      setIsChangingPass(true);
+      const res = await changeAdminPassword(currentPassword, newPassword, recoveryPin);
+      setIsChangingPass(false);
+
+      if (res.success) {
+        setPassSuccess('¡Contraseña de administrador actualizada con éxito!');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setRecoveryPin('');
+      } else {
+        setPassError(res.error || 'No se pudo actualizar la contraseña.');
+      }
+    } else {
+      setPassSuccess('Contraseña actualizada correctamente.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    setIsProfileOpen(false);
+    showToast('Has cerrado sesión. Modo visitante activo.');
   };
 
   return (
@@ -224,6 +293,21 @@ export const UserProfileModal: React.FC = () => {
           >
             <Settings className="w-4 h-4 text-slate-400" />
             <span>Foto & Ajustes</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('security')}
+            className={`py-3 sm:py-3.5 flex items-center gap-1.5 sm:gap-2 border-b-2 whitespace-nowrap transition-colors cursor-pointer ${
+              activeTab === 'security'
+                ? 'border-blue-400 text-white font-bold'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Lock className="w-4 h-4 text-emerald-400" />
+            <span>Seguridad & Cuenta</span>
+            {isAdmin && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+            )}
           </button>
         </div>
 
@@ -470,10 +554,10 @@ export const UserProfileModal: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="px-3 py-1.5 bg-[#14264c] hover:bg-[#1c366d] text-blue-200 hover:text-white rounded-lg text-xs font-medium border border-[#234282] transition-colors flex items-center gap-1.5 cursor-pointer"
+                        className="px-3.5 py-2 bg-[#14264c] hover:bg-[#1c366d] text-blue-200 hover:text-white rounded-xl text-xs font-semibold border border-[#234282] transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
                       >
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Subir desde dispositivo</span>
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Elegir de Fototeca o Archivos</span>
                       </button>
 
                       <button
@@ -642,6 +726,218 @@ export const UserProfileModal: React.FC = () => {
                 </button>
               </div>
             </form>
+          )}
+
+          {/* TAB 4: SECURITY & ACCESS */}
+          {activeTab === 'security' && (
+            <div className="space-y-6">
+              {/* If Guest User */}
+              {isGuest ? (
+                <div className="p-6 rounded-2xl bg-[#0b162c] border border-[#1b2f56] text-center space-y-4">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-blue-950/80 border border-blue-500/40 flex items-center justify-center text-blue-400">
+                    <Lock className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">Estás en Modo Invitado</h3>
+                    <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
+                      Puedes navegar libremente por todos los juegos, aplicaciones, noticias y eventos de Bassify Hub.
+                      Para guardar tus favoritos, publicar o gestionar como administrador oficial, inicia sesión con tu cuenta.
+                    </p>
+                  </div>
+                  <div className="pt-2 flex justify-center">
+                    <button
+                      onClick={() => {
+                        setIsProfileOpen(false);
+                        setIsAuthModalOpen(true);
+                      }}
+                      className="px-6 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-[#003791] to-[#0055cb] text-white hover:brightness-110 transition-all shadow-lg flex items-center gap-2 cursor-pointer"
+                    >
+                      <Lock className="w-4 h-4" />
+                      <span>Iniciar Sesión / Registrarme</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Account Protection Card */}
+                  <div className={`p-4 sm:p-5 rounded-2xl border ${
+                    isAdmin
+                      ? 'bg-blue-950/30 border-blue-500/40'
+                      : 'bg-[#0b162c] border-[#18294a]'
+                  }`}>
+                    <div className="flex items-start gap-3.5">
+                      <div className={`p-2.5 rounded-xl ${
+                        isAdmin ? 'bg-blue-600/30 text-blue-300' : 'bg-slate-800 text-slate-300'
+                      }`}>
+                        <ShieldCheck className="w-6 h-6" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h3 className="text-sm font-bold text-white">
+                            {isAdmin ? 'Cuenta Oficial Protegida: grupobassify@gmail.com' : 'Cuenta de Miembro Registrado'}
+                          </h3>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold ${
+                            isAdmin ? 'bg-blue-600 text-white' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                          }`}>
+                            {isAdmin ? 'MÁXIMA SEGURIDAD' : 'ACTIVA'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                          {isAdmin
+                            ? 'El acceso a esta cuenta administrativa requiere verificación obligatoria por contraseña. Solo el administrador con las credenciales correctas o el PIN de respaldo puede iniciar sesión o modificar contenidos.'
+                            : 'Tu cuenta de usuario está activa en el dispositivo actual.'}
+                        </p>
+                        {isAdmin && (
+                          <div className="mt-3 p-2.5 rounded-xl bg-black/40 border border-blue-900/40 text-[11px] text-blue-300 flex items-center gap-2">
+                            <KeyRound className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <span>
+                              Protección de cuenta activa. Recuerda guardar tu PIN privado en un lugar seguro para cualquier recuperación.
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Change Password Form */}
+                  <div className="p-4 sm:p-5 rounded-2xl bg-[#0b162c] border border-[#1b2f56]">
+                    <div className="flex items-center gap-2 mb-4">
+                      <KeyRound className="w-4 h-4 text-blue-400" />
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-white">
+                        {isAdmin ? 'Cambiar Contraseña de Administrador' : 'Actualizar Contraseña'}
+                      </h4>
+                    </div>
+
+                    {passError && (
+                      <div className="mb-4 p-3 rounded-xl bg-rose-950/40 border border-rose-900/50 text-rose-300 text-xs flex items-center gap-2">
+                        <ShieldAlert className="w-4 h-4 shrink-0" />
+                        <span>{passError}</span>
+                      </div>
+                    )}
+
+                    {passSuccess && (
+                      <div className="mb-4 p-3 rounded-xl bg-emerald-950/40 border border-emerald-900/50 text-emerald-300 text-xs flex items-center gap-2">
+                        <Check className="w-4 h-4 shrink-0" />
+                        <span>{passSuccess}</span>
+                      </div>
+                    )}
+
+                    <form onSubmit={handlePasswordChange} className="space-y-3.5">
+                      {isAdmin ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                              Contraseña Actual *
+                            </label>
+                            <input
+                              type={showPass ? 'text' : 'password'}
+                              value={currentPassword}
+                              onChange={e => setCurrentPassword(e.target.value)}
+                              placeholder="Tu contraseña actual"
+                              className="w-full bg-[#070e1c] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                              O PIN Maestro de Recuperación (9824)
+                            </label>
+                            <input
+                              type="text"
+                              value={recoveryPin}
+                              onChange={e => setRecoveryPin(e.target.value)}
+                              placeholder="PIN 9824"
+                              className="w-full bg-[#070e1c] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400 font-mono"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                            Contraseña Actual *
+                          </label>
+                          <input
+                            type={showPass ? 'text' : 'password'}
+                            value={currentPassword}
+                            onChange={e => setCurrentPassword(e.target.value)}
+                            placeholder="Tu contraseña actual"
+                            className="w-full bg-[#070e1c] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400"
+                          />
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                            Nueva Contraseña * (Mín. 6 caracteres)
+                          </label>
+                          <input
+                            type={showPass ? 'text' : 'password'}
+                            required
+                            value={newPassword}
+                            onChange={e => setNewPassword(e.target.value)}
+                            placeholder="Nueva contraseña segura"
+                            className="w-full bg-[#070e1c] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                            Confirmar Nueva Contraseña *
+                          </label>
+                          <input
+                            type={showPass ? 'text' : 'password'}
+                            required
+                            value={confirmPassword}
+                            onChange={e => setConfirmPassword(e.target.value)}
+                            placeholder="Repite la nueva contraseña"
+                            className="w-full bg-[#070e1c] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowPass(!showPass)}
+                          className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1.5 cursor-pointer"
+                        >
+                          {showPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          <span>{showPass ? 'Ocultar caracteres' : 'Mostrar caracteres'}</span>
+                        </button>
+
+                        <button
+                          type="submit"
+                          disabled={isChangingPass}
+                          className="px-4 py-2 bg-[#00439c] hover:bg-blue-600 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>{isChangingPass ? 'Actualizando...' : 'Actualizar Contraseña'}</span>
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Logout Area */}
+                  <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-white">Cerrar Sesión en este Dispositivo</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        Al salir, la plataforma volverá a navegar como visitante (modo Invitado).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="w-full sm:w-auto px-4 py-2 bg-rose-600/80 hover:bg-rose-600 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer shadow-sm"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Cerrar Sesión</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>
