@@ -63,6 +63,9 @@ interface AppContextType {
   setIsProfileOpen: (open: boolean) => void;
   editingItem: ContentItem | null;
   setEditingItem: (item: ContentItem | null) => void;
+  linkEditingItem: ContentItem | null;
+  setLinkEditingItem: (item: ContentItem | null) => void;
+  updateGameLink: (id: string, newLink: string) => Promise<void>;
   isChatSidebarOpen: boolean;
   setIsChatSidebarOpen: (open: boolean) => void;
   isMobileSidebarOpen: boolean;
@@ -213,6 +216,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [selectedItem, setSelectedItem] = useState<ContentItem | null>(null);
   const [editingItem, setEditingItem] = useState<ContentItem | null>(null);
+  const [linkEditingItem, setLinkEditingItem] = useState<ContentItem | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
   const [isTableModalOpen, setIsTableModalOpen] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
@@ -712,6 +716,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setEditingItem(null);
   };
 
+  // Dedicated Quick Game Link Update (Admin)
+  const updateGameLink = async (id: string, newLink: string) => {
+    if (!isAdmin) {
+      showToast('Acceso denegado: Solo el administrador oficial puede cambiar links.');
+      return;
+    }
+    const cleanLink = newLink.trim();
+    await updateItem(id, { downloadUrl: cleanLink });
+    showToast('¡Enlace del juego actualizado con éxito!');
+    setLinkEditingItem(null);
+  };
+
   const toggleFeatured = async (id: string) => {
     if (!isAdmin) {
       showToast('Acceso denegado: Solo grupobassify@gmail.com puede gestionar destacados.');
@@ -1129,6 +1145,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsProfileOpen,
         editingItem,
         setEditingItem,
+        linkEditingItem,
+        setLinkEditingItem,
+        updateGameLink,
         isChatSidebarOpen,
         setIsChatSidebarOpen,
         isMobileSidebarOpen,

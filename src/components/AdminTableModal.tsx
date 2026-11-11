@@ -19,6 +19,9 @@ import {
   Database,
   Sliders,
   Flag,
+  Globe,
+  Link as LinkIcon,
+  ExternalLink,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ContentItem, ItemType, ReportItem } from '../types';
@@ -31,6 +34,7 @@ export const AdminTableModal: React.FC = () => {
     items,
     setSelectedItem,
     setEditingItem,
+    setLinkEditingItem,
     setIsUploadModalOpen,
     deleteItem,
     deleteComment,
@@ -299,6 +303,7 @@ export const AdminTableModal: React.FC = () => {
                     <th className="py-3 px-4">Logo (512x512)</th>
                     <th className="py-3 px-4">Título & Desarrollador</th>
                     <th className="py-3 px-4">Sección & Estado</th>
+                    <th className="py-3 px-4">Sitio Web / Link</th>
                     <th className="py-3 px-4">Género</th>
                     <th className="py-3 px-4">Versión / Tamaño</th>
                     <th className="py-3 px-4">Rating / Reseñas</th>
@@ -308,7 +313,7 @@ export const AdminTableModal: React.FC = () => {
                 <tbody className="divide-y divide-[#152445] text-slate-300">
                   {filteredTableItems.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-500">
+                      <td colSpan={8} className="py-12 text-center text-slate-500">
                         No se encontraron registros en la tabla.
                       </td>
                     </tr>
@@ -367,6 +372,44 @@ export const AdminTableModal: React.FC = () => {
                           </div>
                         </td>
 
+                        {/* Website / Game Link */}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-1.5">
+                            {item.downloadUrl && item.downloadUrl !== '#' ? (
+                              <button
+                                onClick={() => setLinkEditingItem(item)}
+                                className="px-2.5 py-1 rounded-lg bg-blue-950/60 hover:bg-blue-900 border border-blue-500/30 text-blue-300 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer text-[11px] max-w-[160px] truncate"
+                                title="Cambiar enlace del juego"
+                              >
+                                <Globe className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                <span className="truncate font-mono">
+                                  {item.downloadUrl.replace(/^https?:\/\//, '')}
+                                </span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setLinkEditingItem(item)}
+                                className="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white border border-slate-700 transition-colors cursor-pointer"
+                                title="Asignar enlace al juego"
+                              >
+                                + Asignar Link
+                              </button>
+                            )}
+
+                            {item.downloadUrl && item.downloadUrl !== '#' && (
+                              <a
+                                href={item.downloadUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="p-1 text-slate-500 hover:text-blue-300 transition-colors cursor-pointer"
+                                title="Visitar sitio oficial"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </a>
+                            )}
+                          </div>
+                        </td>
+
                         {/* Genre */}
                         <td className="py-3 px-4">
                           <span className="text-slate-300">{item.genre}</span>
@@ -402,6 +445,14 @@ export const AdminTableModal: React.FC = () => {
                             {isAdmin && (
                               <>
                                 <button
+                                  onClick={() => setLinkEditingItem(item)}
+                                  className="p-1.5 text-cyan-400 hover:text-white hover:bg-cyan-600/30 rounded-lg transition-colors cursor-pointer"
+                                  title="Cambiar link del sitio (Admin)"
+                                >
+                                  <LinkIcon className="w-4 h-4" />
+                                </button>
+
+                                <button
                                   onClick={() => toggleFeatured(item.id)}
                                   className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                                     item.isFeatured
@@ -416,7 +467,7 @@ export const AdminTableModal: React.FC = () => {
                                 <button
                                   onClick={() => handleEdit(item)}
                                   className="p-1.5 text-blue-400 hover:text-white hover:bg-blue-600/30 rounded-lg transition-colors cursor-pointer"
-                                  title="Editar registro"
+                                  title="Editar registro completo"
                                 >
                                   <Edit className="w-4 h-4" />
                                 </button>

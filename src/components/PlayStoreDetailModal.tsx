@@ -5,6 +5,8 @@ import {
   Download,
   Share2,
   ExternalLink,
+  Globe,
+  Link as LinkIcon,
   ShieldCheck,
   CheckCircle2,
   Heart,
@@ -36,6 +38,7 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
     currentUser,
     deleteItem,
     setEditingItem,
+    setLinkEditingItem,
     setIsUploadModalOpen,
     toggleLikeItem,
     toggleFeatured,
@@ -55,16 +58,18 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
 
   const isLiked = item.likedBy.includes(currentUser.email);
 
-  const handleDownload = () => {
-    setIsDownloading(true);
-    showToast(`Iniciando descarga de ${item.title} (${item.fileSize})...`);
-    setTimeout(() => {
-      setIsDownloading(false);
-      showToast(`¡Descarga completada con éxito!`);
-      if (item.downloadUrl && item.downloadUrl !== '#') {
-        window.open(item.downloadUrl, '_blank', 'noopener,noreferrer');
+  const handleVisitSite = () => {
+    if (!item.downloadUrl || item.downloadUrl === '#') {
+      if (isAdmin) {
+        showToast('Configura el enlace oficial del juego a continuación.');
+        setLinkEditingItem(item);
+      } else {
+        showToast('El enlace de este juego aún no ha sido configurado.');
       }
-    }, 1500);
+      return;
+    }
+    showToast(`Visitando sitio oficial de ${item.title}...`);
+    window.open(item.downloadUrl, '_blank', 'noopener,noreferrer');
   };
 
   const handleShare = () => {
@@ -166,7 +171,7 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
                 <span className="text-slate-600">|</span>
                 <button
                   onClick={handleEdit}
-                  className="text-[10px] sm:text-xs text-blue-300 hover:text-white flex items-center gap-1 font-medium px-1.5 py-0.5"
+                  className="text-[10px] sm:text-xs text-blue-300 hover:text-white flex items-center gap-1 font-medium px-1.5 py-0.5 cursor-pointer"
                   title="Editar publicación"
                 >
                   <Edit className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
@@ -174,8 +179,17 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
                 </button>
                 <span className="text-slate-600">|</span>
                 <button
+                  onClick={() => setLinkEditingItem(item)}
+                  className="text-[10px] sm:text-xs text-cyan-300 hover:text-white flex items-center gap-1 font-medium px-1.5 py-0.5 cursor-pointer"
+                  title="Cambiar enlace del sitio web"
+                >
+                  <LinkIcon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                  Cambiar Link
+                </button>
+                <span className="text-slate-600">|</span>
+                <button
                   onClick={handleDelete}
-                  className="text-[10px] sm:text-xs text-rose-300 hover:text-rose-100 flex items-center gap-1 font-medium px-1.5 py-0.5"
+                  className="text-[10px] sm:text-xs text-rose-300 hover:text-rose-100 flex items-center gap-1 font-medium px-1.5 py-0.5 cursor-pointer"
                   title="Eliminar publicación"
                 >
                   <Trash2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
@@ -216,24 +230,34 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
               </div>
             </div>
 
-            {/* Action Buttons: Instalar / Descargar + Like + Compartir */}
-            <div className="flex items-center justify-center gap-2 w-full sm:w-auto shrink-0 mt-2 sm:mt-0">
+            {/* Action Buttons: Visitar Sitio + Cambiar Link (Admin) + Like + Guardar */}
+            <div className="flex items-center justify-center gap-2 w-full sm:w-auto shrink-0 mt-2 sm:mt-0 flex-wrap">
               <button
-                onClick={handleDownload}
-                disabled={isDownloading}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-sm bg-gradient-to-r from-blue-600 via-[#0055cb] to-[#00439c] text-white hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-blue-900/50 cursor-pointer disabled:opacity-60"
+                onClick={handleVisitSite}
+                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-sm bg-gradient-to-r from-blue-600 via-[#0055cb] to-[#00439c] text-white hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-blue-900/50 cursor-pointer"
+                title="Visitar sitio web oficial"
               >
-                <Download className="w-4 h-4" />
+                <Globe className="w-4 h-4" />
                 <span>
-                  {isDownloading
-                    ? 'Descargando...'
-                    : item.type === 'event'
-                    ? 'Inscribirme / Asistir'
+                  {item.type === 'event'
+                    ? 'Visitar Sitio del Evento'
                     : item.type === 'news'
-                    ? 'Leer Completo'
-                    : 'Instalar Juego Completo'}
+                    ? 'Visitar Artículo'
+                    : 'Visitar Sitio'}
                 </span>
+                <ExternalLink className="w-3.5 h-3.5 opacity-80" />
               </button>
+
+              {isAdmin && (
+                <button
+                  onClick={() => setLinkEditingItem(item)}
+                  className="px-3.5 py-3 rounded-xl border border-cyan-500/40 bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 hover:text-white transition-all cursor-pointer shadow-md flex items-center gap-1.5 text-xs font-semibold"
+                  title="Cambiar link de este juego (Admin)"
+                >
+                  <LinkIcon className="w-4 h-4" />
+                  <span className="hidden sm:inline">Cambiar Link</span>
+                </button>
+              )}
 
               <button
                 onClick={() => toggleLikeItem(item.id)}
@@ -299,7 +323,7 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
             <div className="p-2 bg-[#0e1a32] rounded-xl border border-[#1b2f56]">
               <p className="text-base font-bold text-white font-mono">{item.downloadsCount}</p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                {item.type === 'news' ? 'Lecturas' : item.type === 'event' ? 'Participantes' : 'Descargas'}
+                {item.type === 'news' ? 'Lecturas' : item.type === 'event' ? 'Participantes' : 'Visitas'}
               </p>
             </div>
 
@@ -398,20 +422,37 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
               {item.description}
             </div>
 
-            {/* External Links */}
-            {item.downloadUrl && item.downloadUrl !== '#' && (
-              <div className="mt-4 pt-3 flex items-center gap-2">
-                <a
-                  href={item.downloadUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-400 hover:text-blue-300 hover:underline"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Visitar enlace de descarga o web oficial</span>
-                </a>
+            {/* External Official Website Link & Admin Quick Edit */}
+            <div className="mt-4 pt-3 flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-[#0c1830] border border-[#1b2f56]">
+              <div className="flex items-center gap-2.5 text-xs min-w-0">
+                <Globe className="w-4 h-4 text-blue-400 shrink-0" />
+                <span className="text-slate-400 shrink-0 font-medium">Sitio Oficial:</span>
+                {item.downloadUrl && item.downloadUrl !== '#' ? (
+                  <a
+                    href={item.downloadUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold text-blue-400 hover:text-blue-300 hover:underline truncate max-w-[200px] sm:max-w-md font-mono"
+                  >
+                    <span className="truncate">{item.downloadUrl}</span>
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                  </a>
+                ) : (
+                  <span className="text-slate-500 italic">Sin enlace configurado</span>
+                )}
               </div>
-            )}
+
+              {isAdmin && (
+                <button
+                  onClick={() => setLinkEditingItem(item)}
+                  className="px-3 py-1.5 bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 hover:text-white border border-cyan-500/40 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-sm"
+                  title="Cambiar link de este juego"
+                >
+                  <LinkIcon className="w-3.5 h-3.5" />
+                  <span>Cambiar Link</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Community Reviews & Comments Section (Discord + Play Store Hybrid) */}

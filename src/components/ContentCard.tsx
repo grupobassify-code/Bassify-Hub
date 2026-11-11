@@ -1,5 +1,5 @@
 import React from 'react';
-import { Star, Download, Heart, Edit, Trash2, ArrowUpRight, Calendar, MapPin, Hammer, RefreshCw } from 'lucide-react';
+import { Star, Download, Heart, Edit, Trash2, ArrowUpRight, Calendar, MapPin, Hammer, RefreshCw, Globe, Link as LinkIcon } from 'lucide-react';
 import { ContentItem } from '../types';
 import { useApp } from '../context/AppContext';
 import { SafeImage } from './SafeImage';
@@ -14,6 +14,7 @@ export const ContentCard: React.FC<ContentCardProps> = ({ item }) => {
     isAdmin,
     deleteItem,
     setEditingItem,
+    setLinkEditingItem,
     setIsUploadModalOpen,
     toggleLikeItem,
     toggleFeatured,
@@ -102,6 +103,16 @@ export const ContentCard: React.FC<ContentCardProps> = ({ item }) => {
                   title={item.isFeatured ? 'Quitar de Destacados' : 'Marcar como Destacado (Admin)'}
                 >
                   <Star className={`w-3.5 h-3.5 ${item.isFeatured ? 'fill-amber-400' : ''}`} />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setLinkEditingItem(item);
+                  }}
+                  className="p-1 hover:text-cyan-400 text-slate-300 transition-colors"
+                  title="Cambiar link del sitio (Admin)"
+                >
+                  <LinkIcon className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={handleEdit}
@@ -201,16 +212,33 @@ export const ContentCard: React.FC<ContentCardProps> = ({ item }) => {
               <span>{item.rating}</span>
             </div>
 
-            {/* Downloads / Views */}
-            <div className="text-slate-400 flex items-center gap-1 font-mono text-[11px]">
-              <Download className="w-3 h-3 text-slate-500" />
+            {/* Visits / Popularity */}
+            <div className="text-slate-400 flex items-center gap-1 font-mono text-[11px]" title={`${item.downloadsCount} visitas`}>
+              <Globe className="w-3 h-3 text-slate-500" />
               <span>{item.downloadsCount}</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 text-blue-400 group-hover:text-white font-semibold text-xs transition-colors">
-            <span>Ver ficha</span>
-            <ArrowUpRight className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-2">
+            {item.downloadUrl && item.downloadUrl !== '#' && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open(item.downloadUrl, '_blank', 'noopener,noreferrer');
+                }}
+                className="px-2 py-0.5 rounded-md bg-blue-600/30 hover:bg-blue-600/60 text-blue-200 hover:text-white text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                title="Visitar sitio oficial"
+              >
+                <Globe className="w-3 h-3" />
+                <span>Sitio</span>
+              </button>
+            )}
+
+            <div className="flex items-center gap-1.5 text-blue-400 group-hover:text-white font-semibold text-xs transition-colors">
+              <span>Ficha</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </div>
           </div>
         </div>
       </div>

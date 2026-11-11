@@ -18,6 +18,7 @@ import { DiscordChatPanel } from './components/DiscordChatPanel';
 import { UserProfileModal } from './components/UserProfileModal';
 import { AuthModal } from './components/AuthModal';
 import { ReportModal } from './components/ReportModal';
+import { LinkEditModal } from './components/LinkEditModal';
 import { Toast } from './components/Toast';
 import { SectionType } from './types';
 
@@ -113,6 +114,9 @@ const AppLayout: React.FC = () => {
 
       {/* Community Report Modal for Offensive Content / Bad Words */}
       <ReportModal />
+
+      {/* Admin Quick Game Link Editor Modal */}
+      <LinkEditModal />
 
       {/* Action Notifications */}
       <Toast />

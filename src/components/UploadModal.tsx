@@ -612,18 +612,18 @@ export const UploadModal: React.FC = () => {
 
               <div className="p-3 rounded-2xl bg-[#0b162c] border border-[#1b2e56] space-y-2">
                 <label className="block text-xs font-semibold text-slate-300">
-                  Link de Descarga / Web Oficial *
+                  Link del Juego / Sitio Web Oficial (Botón &quot;Visitar Sitio&quot;) *
                 </label>
                 <div className="pt-1">
                   <input
                     type="url"
                     value={downloadUrl}
                     onChange={e => setDownloadUrl(e.target.value)}
-                    placeholder="https://bassify.hub/..."
+                    placeholder="https://tu-juego.com o sitio web oficial..."
                     className="w-full bg-[#081022] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400 font-mono"
                   />
                   <p className="text-[10px] text-slate-400 mt-1.5">
-                    Enlace de descarga o destino web para el botón de acción en la tienda
+                    Este es el enlace al que se dirigirá al usuario cuando haga clic en &quot;Visitar Sitio&quot;
                   </p>
                 </div>
               </div>
@@ -633,13 +633,13 @@ export const UploadModal: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Tamaño de Descarga
+                  Tamaño o Modalidad
                 </label>
                 <input
                   type="text"
                   value={fileSize}
                   onChange={e => setFileSize(e.target.value)}
-                  placeholder="Ej. 1.2 GB, 250 MB..."
+                  placeholder="Ej. Online, 1.2 GB, WebApp, PC/Móvil..."
                   className="w-full bg-[#0b162c] border border-[#1b2e56] text-xs text-white rounded-xl p-2.5 focus:outline-none focus:border-blue-400"
                 />
               </div>
