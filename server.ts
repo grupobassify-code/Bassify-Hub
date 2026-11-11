@@ -1,8 +1,19 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
+import { GoogleGenAI } from '@google/genai';
+
+const getGeminiClient = (): GoogleGenAI | null => {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key || !key.trim()) return null;
+  return new GoogleGenAI({
+    apiKey: key.trim(),
+    httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
+  });
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -424,8 +435,171 @@ async function startServer() {
   });
 
   // ==========================================
-  // VITE MIDDLEWARE INTEGRATION (DEV / PROD)
+  // GEMINI AI - SLAP BASS CHILL MENU MUSIC
   // ==========================================
+  app.all('/api/gemini/generate-menu-music', async (_req: Request, res: Response) => {
+    console.log('[Gemini Music] Request received for chill slap bass groove');
+    // Curated high-fidelity fallback slap bass grooves in case Gemini API is unreachable or key is unset
+    const fallbackGrooves = [
+      {
+        title: 'Bassify Slap Velvet — Gemini Chill Motif',
+        key: 'Sol menor (Chill Slap Funk)',
+        bpm: 80,
+        description: 'Bajo slap suave con notas de pulgar profundas, pops aterciopelados y acordes de piano Rhodes.',
+        chords: [
+          { name: 'Gm9', notes: ['Bb3', 'D4', 'F4', 'A4'], time: 0, duration: 4 },
+          { name: 'Ebmaj9', notes: ['G3', 'Bb3', 'D4', 'F4'], time: 4, duration: 4 },
+          { name: 'Cm9', notes: ['Eb3', 'G3', 'Bb3', 'D4'], time: 8, duration: 4 },
+          { name: 'D7#9', notes: ['F#3', 'C4', 'Eb4', 'F4'], time: 12, duration: 4 },
+        ],
+        bassline: [
+          { note: 'G1', time: 0.0, duration: 0.75, type: 'slap', velocity: 0.9 },
+          { note: 'G1', time: 0.75, duration: 0.25, type: 'ghost', velocity: 0.4 },
+          { note: 'G2', time: 1.0, duration: 0.5, type: 'pop', velocity: 0.8 },
+          { note: 'F2', time: 1.75, duration: 0.5, type: 'pop', velocity: 0.7 },
+          { note: 'G1', time: 2.5, duration: 0.5, type: 'slap', velocity: 0.8 },
+          { note: 'Bb1', time: 3.25, duration: 0.35, type: 'slap', velocity: 0.75 },
+          { note: 'C2', time: 3.65, duration: 0.35, type: 'slap', velocity: 0.8 },
+          { note: 'Eb1', time: 4.0, duration: 0.75, type: 'slap', velocity: 0.9 },
+          { note: 'Eb2', time: 4.75, duration: 0.5, type: 'pop', velocity: 0.85 },
+          { note: 'D2', time: 5.5, duration: 0.4, type: 'pop', velocity: 0.65 },
+          { note: 'Eb1', time: 6.25, duration: 0.5, type: 'slap', velocity: 0.8 },
+          { note: 'G1', time: 7.0, duration: 0.4, type: 'slap', velocity: 0.7 },
+          { note: 'Bb1', time: 7.5, duration: 0.5, type: 'pop', velocity: 0.75 },
+          { note: 'C1', time: 8.0, duration: 0.75, type: 'slap', velocity: 0.9 },
+          { note: 'C2', time: 8.75, duration: 0.5, type: 'pop', velocity: 0.85 },
+          { note: 'Bb1', time: 9.5, duration: 0.4, type: 'pop', velocity: 0.6 },
+          { note: 'C1', time: 10.25, duration: 0.5, type: 'slap', velocity: 0.75 },
+          { note: 'Eb2', time: 11.0, duration: 0.4, type: 'pop', velocity: 0.8 },
+          { note: 'F2', time: 11.5, duration: 0.5, type: 'pop', velocity: 0.85 },
+          { note: 'D1', time: 12.0, duration: 0.75, type: 'slap', velocity: 0.9 },
+          { note: 'D2', time: 12.75, duration: 0.5, type: 'pop', velocity: 0.8 },
+          { note: 'C2', time: 13.5, duration: 0.4, type: 'pop', velocity: 0.65 },
+          { note: 'D1', time: 14.25, duration: 0.4, type: 'slap', velocity: 0.75 },
+          { note: 'F2', time: 14.75, duration: 0.4, type: 'pop', velocity: 0.75 },
+          { note: 'F#2', time: 15.25, duration: 0.75, type: 'pop', velocity: 0.8 },
+        ],
+      },
+      {
+        title: 'Bassify Chill Horizon — Slap Suave',
+        key: 'Do menor (Lounge Lo-Fi)',
+        bpm: 84,
+        description: 'Slap suave y relajado con groove nocturno calmado y dinámicas sutiles.',
+        chords: [
+          { name: 'Cm9', notes: ['Eb3', 'G3', 'Bb3', 'D4'], time: 0, duration: 4 },
+          { name: 'Abmaj7', notes: ['Eb3', 'Ab3', 'C4', 'G4'], time: 4, duration: 4 },
+          { name: 'Fm9', notes: ['Ab3', 'C4', 'Eb4', 'G4'], time: 8, duration: 4 },
+          { name: 'G7alt', notes: ['F3', 'B3', 'Eb4', 'Ab4'], time: 12, duration: 4 },
+        ],
+        bassline: [
+          { note: 'C2', time: 0.0, duration: 0.75, type: 'slap', velocity: 0.88 },
+          { note: 'C3', time: 1.0, duration: 0.5, type: 'pop', velocity: 0.78 },
+          { note: 'Bb2', time: 1.75, duration: 0.4, type: 'pop', velocity: 0.7 },
+          { note: 'C2', time: 2.5, duration: 0.5, type: 'slap', velocity: 0.82 },
+          { note: 'Eb2', time: 3.25, duration: 0.4, type: 'slap', velocity: 0.7 },
+          { note: 'Ab1', time: 4.0, duration: 0.75, type: 'slap', velocity: 0.9 },
+          { note: 'Ab2', time: 4.75, duration: 0.5, type: 'pop', velocity: 0.8 },
+          { note: 'G2', time: 5.5, duration: 0.4, type: 'pop', velocity: 0.65 },
+          { note: 'Ab1', time: 6.25, duration: 0.5, type: 'slap', velocity: 0.75 },
+          { note: 'C2', time: 7.25, duration: 0.5, type: 'pop', velocity: 0.7 },
+          { note: 'F1', time: 8.0, duration: 0.75, type: 'slap', velocity: 0.9 },
+          { note: 'F2', time: 8.75, duration: 0.5, type: 'pop', velocity: 0.82 },
+          { note: 'Eb2', time: 9.5, duration: 0.4, type: 'pop', velocity: 0.65 },
+          { note: 'F1', time: 10.25, duration: 0.5, type: 'slap', velocity: 0.75 },
+          { note: 'Ab2', time: 11.25, duration: 0.5, type: 'pop', velocity: 0.8 },
+          { note: 'G1', time: 12.0, duration: 0.75, type: 'slap', velocity: 0.9 },
+          { note: 'G2', time: 12.75, duration: 0.5, type: 'pop', velocity: 0.78 },
+          { note: 'F2', time: 13.5, duration: 0.4, type: 'pop', velocity: 0.65 },
+          { note: 'G1', time: 14.25, duration: 0.4, type: 'slap', velocity: 0.75 },
+          { note: 'B2', time: 15.0, duration: 0.75, type: 'pop', velocity: 0.8 },
+        ],
+      },
+    ];
+
+    try {
+      const ai = getGeminiClient();
+      if (!ai) {
+        const selected = fallbackGrooves[Math.floor(Math.random() * fallbackGrooves.length)];
+        return res.json({ success: true, groove: selected, source: 'curated' });
+      }
+
+      const prompt = `You are a world-class jazz-funk & lo-fi bass composer.
+Compose a relaxed, calm, chilled slap-bass groove motif ("bajo slap, relajada y calmada") specifically tailored for a PlayStation-style gaming hub menu.
+
+Requirements:
+- Mood: Chill, calm, smooth, relaxing, mellow, tasteful, never harsh or loud.
+- Bass technique: Gentle thumb slaps ('slap' or 'thumb') on downbeats, delicate velvety high-string pops ('pop') on syncopated offbeats, plus occasional soft muted ghost notes ('ghost').
+- Harmonic structure: 4 rich jazz/neo-soul chords over a 16-beat cycle (each chord lasting 4 beats: at time 0, 4, 8, 12).
+- Key: D minor, G minor, C minor, or F major.
+- Notes must use standard pitch names like 'C2', 'D2', 'Eb2', 'E2', 'F2', 'G2', 'Ab2', 'A2', 'Bb2', 'B2', 'C3', 'D3', 'Eb3', 'E3', 'F3', 'G3', 'A3', 'Bb3', 'C4'.
+- Durations in beats (0.25 to 1.25). Times between 0.0 and 15.75.
+- Tempo (bpm): Between 78 and 85 BPM.
+- Title and description in Spanish reflecting the chilled slap bass aesthetic.
+
+Return ONLY strict valid JSON matching this structure:
+{
+  "title": string,
+  "key": string,
+  "bpm": number,
+  "description": string,
+  "chords": [
+    { "name": string, "notes": ["string", "string", "string", "string"], "time": 0, "duration": 4 }
+  ],
+  "bassline": [
+    {
+      "note": string,
+      "time": number,
+      "duration": number,
+      "type": "slap" | "pop" | "thumb" | "ghost",
+      "velocity": number (0.4 to 0.95)
+    }
+  ]
+}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+          temperature: 0.7,
+        },
+      });
+
+      const responseText = response.text || '';
+      const parsedGroove = JSON.parse(responseText);
+
+      // Validate groove structure
+      if (
+        parsedGroove &&
+        typeof parsedGroove.title === 'string' &&
+        Array.isArray(parsedGroove.chords) &&
+        Array.isArray(parsedGroove.bassline) &&
+        parsedGroove.bassline.length >= 8
+      ) {
+        return res.json({
+          success: true,
+          groove: {
+            title: parsedGroove.title || 'Bassify Gemini Slap Chill',
+            key: parsedGroove.key || 'D menor (Gemini AI)',
+            bpm: Math.min(95, Math.max(70, Number(parsedGroove.bpm) || 82)),
+            description: parsedGroove.description || 'Groove de bajo slap relajado compuesto con Gemini AI.',
+            chords: parsedGroove.chords,
+            bassline: parsedGroove.bassline,
+          },
+          source: 'gemini-3.8-flash',
+        });
+      }
+
+      // If validation fails, return fallback
+      const selected = fallbackGrooves[Math.floor(Math.random() * fallbackGrooves.length)];
+      return res.json({ success: true, groove: selected, source: 'fallback' });
+    } catch (err) {
+      console.error('Error generating music with Gemini:', err);
+      const selected = fallbackGrooves[Math.floor(Math.random() * fallbackGrooves.length)];
+      return res.json({ success: true, groove: selected, source: 'fallback' });
+    }
+  });
+
   const isProduction = process.env.NODE_ENV === 'production';
   if (!isProduction) {
     const vite = await createViteServer({

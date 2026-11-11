@@ -26,6 +26,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { ContentItem } from '../types';
 import { SafeImage } from './SafeImage';
+import { audio } from '../utils/audioSystem';
 
 interface PlayStoreDetailModalProps {
   item: ContentItem;
@@ -69,10 +70,15 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
       return;
     }
     showToast(`Visitando sitio oficial de ${item.title}...`);
-    window.open(item.downloadUrl, '_blank', 'noopener,noreferrer');
+    audio.playButtonClick();
+    const win = window.open(item.downloadUrl, '_blank', 'noopener,noreferrer');
+    if (!win) {
+      window.location.href = item.downloadUrl;
+    }
   };
 
   const handleShare = () => {
+    audio.playButtonClick();
     if (navigator.clipboard) {
       navigator.clipboard.writeText(window.location.href);
       showToast('Enlace copiado al portapapeles.');
@@ -82,17 +88,20 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
   const handlePostComment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentText.trim()) return;
+    audio.playButtonClick();
     addComment(item.id, commentText, userRating);
     setCommentText('');
   };
 
   const handleEdit = () => {
+    audio.playButtonClick();
     setEditingItem(item);
     setIsUploadModalOpen(true);
     onClose();
   };
 
   const handleDelete = () => {
+    audio.playButtonClick();
     if (confirm(`¿Estás seguro de eliminar "${item.title}"?`)) {
       deleteItem(item.id);
       onClose();
@@ -104,7 +113,11 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
       <div className="relative w-full max-w-4xl bg-[#091224] border border-[#1b2c4e] rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl my-auto text-slate-200">
         {/* Floating Close Button */}
         <button
-          onClick={onClose}
+          onClick={() => {
+            audio.playButtonClick();
+            onClose();
+          }}
+          onMouseEnter={() => audio.playButtonHover()}
           className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 p-2 rounded-full bg-black/70 hover:bg-black text-white backdrop-blur-md border border-white/20 transition-colors cursor-pointer"
           title="Cerrar modal"
         >

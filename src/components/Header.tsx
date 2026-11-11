@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Search, Plus, TableProperties, ShieldCheck, UserCheck, Star, Menu, MessageSquare, X, Lock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { SectionType } from '../types';
+import { MusicPlayerWidget } from './MusicPlayerWidget';
+import { audio } from '../utils/audioSystem';
 
 export const Header: React.FC = () => {
   const {
@@ -69,7 +71,11 @@ export const Header: React.FC = () => {
           return (
             <button
               key={item.id}
-              onClick={() => setActiveSection(item.id)}
+              onClick={() => {
+                audio.playNavSound();
+                setActiveSection(item.id);
+              }}
+              onMouseEnter={() => audio.playButtonHover()}
               className={`whitespace-nowrap transition-colors py-1 cursor-pointer ${
                 isActive
                   ? 'text-white border-b-2 border-blue-400 font-semibold'
@@ -82,10 +88,13 @@ export const Header: React.FC = () => {
         })}
       </nav>
 
-      {/* Zone 3: Search Bar & Primary Actions */}
-      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+      {/* Zone 3: Music Player, Search Bar & Primary Actions */}
+      <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+        {/* Slap Bass Chill Music Player & Sound Controls */}
+        <MusicPlayerWidget />
+
         {/* Search Input - Desktop & Tablet */}
-        <div className="relative hidden xs:block w-32 sm:w-48 md:w-56 lg:w-60">
+        <div className="relative hidden xs:block w-28 sm:w-44 md:w-52 lg:w-56">
           <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
@@ -96,7 +105,10 @@ export const Header: React.FC = () => {
           />
           {searchQuery && (
             <button
-              onClick={() => setSearchQuery('')}
+              onClick={() => {
+                audio.playButtonClick();
+                setSearchQuery('');
+              }}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
             >
               <X className="w-3 h-3" />
@@ -118,7 +130,10 @@ export const Header: React.FC = () => {
                 className="flex-1 bg-[#101e38] border border-[#1d3159] text-xs text-white placeholder-slate-400 rounded-lg px-3 py-2 focus:outline-none"
               />
               <button
-                onClick={() => setIsSearchExpandedMobile(false)}
+                onClick={() => {
+                  audio.playButtonClick();
+                  setIsSearchExpandedMobile(false);
+                }}
                 className="p-1.5 text-slate-300 hover:text-white"
               >
                 <X className="w-5 h-5" />
@@ -126,7 +141,11 @@ export const Header: React.FC = () => {
             </div>
           ) : (
             <button
-              onClick={() => setIsSearchExpandedMobile(true)}
+              onClick={() => {
+                audio.playButtonClick();
+                setIsSearchExpandedMobile(true);
+              }}
+              onMouseEnter={() => audio.playButtonHover()}
               className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-[#101e38]"
               title="Buscar"
             >
@@ -140,7 +159,11 @@ export const Header: React.FC = () => {
           <>
             {/* Admin Table Button (Desktop / Tablet) */}
             <button
-              onClick={() => setIsTableModalOpen(true)}
+              onClick={() => {
+                audio.playButtonClick();
+                setIsTableModalOpen(true);
+              }}
+              onMouseEnter={() => audio.playButtonHover()}
               className="hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium bg-[#142344] text-slate-200 border border-[#223a6b] hover:bg-[#1a2f5c] hover:text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               title="Ver tabla de información y denuncias"
             >
@@ -155,7 +178,11 @@ export const Header: React.FC = () => {
 
             {/* Admin Upload Button */}
             <button
-              onClick={() => setIsUploadModalOpen(true)}
+              onClick={() => {
+                audio.playButtonClick();
+                setIsUploadModalOpen(true);
+              }}
+              onMouseEnter={() => audio.playButtonHover()}
               className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-semibold bg-[#00439c] text-white hover:bg-[#0052bd] active:scale-95 transition-all shadow-sm shadow-blue-900/50 whitespace-nowrap shrink-0 cursor-pointer"
               title="Subir contenido oficial"
             >
@@ -167,7 +194,11 @@ export const Header: React.FC = () => {
 
         {/* Live Chat Toggle Shortcut */}
         <button
-          onClick={() => setIsChatSidebarOpen(!isChatSidebarOpen)}
+          onClick={() => {
+            audio.playButtonClick();
+            setIsChatSidebarOpen(!isChatSidebarOpen);
+          }}
+          onMouseEnter={() => audio.playButtonHover()}
           className={`p-1.5 sm:p-2 rounded-xl transition-colors cursor-pointer shrink-0 ${
             isChatSidebarOpen ? 'bg-blue-600 text-white' : 'text-slate-300 hover:text-white hover:bg-[#142344]'
           }`}
@@ -179,7 +210,11 @@ export const Header: React.FC = () => {
         {/* Guest: Show Iniciar Sesión button */}
         {isGuest && (
           <button
-            onClick={() => setIsAuthModalOpen(true)}
+            onClick={() => {
+              audio.playButtonClick();
+              setIsAuthModalOpen(true);
+            }}
+            onMouseEnter={() => audio.playButtonHover()}
             className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#003791] to-[#0055cb] hover:brightness-110 text-white text-xs font-bold transition-all shadow-md shrink-0 cursor-pointer"
             title="Iniciar sesión o registrarse"
           >
@@ -190,7 +225,11 @@ export const Header: React.FC = () => {
 
         {/* User Identity / Profile Button */}
         <button
-          onClick={() => setIsProfileOpen(true)}
+          onClick={() => {
+            audio.playButtonClick();
+            setIsProfileOpen(true);
+          }}
+          onMouseEnter={() => audio.playButtonHover()}
           className={`flex items-center gap-2 p-1 sm:px-2.5 sm:py-1.5 rounded-xl border transition-all shrink-0 cursor-pointer ${
             isAdmin
               ? 'bg-blue-950/60 border-blue-500/40 text-blue-200 hover:text-white'

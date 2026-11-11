@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { SectionType } from '../types';
+import { audio } from '../utils/audioSystem';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -49,11 +50,13 @@ export const Sidebar: React.FC = () => {
   const pendingReportsCount = reports.filter(r => r.status === 'pending').length;
 
   const handleSelectSection = (sectionId: SectionType) => {
+    audio.playNavSound();
     setActiveSection(sectionId);
     if (isMobileSidebarOpen) setIsMobileSidebarOpen(false);
   };
 
   const handleSelectChannel = (channelId: string) => {
+    audio.playButtonClick();
     setActiveChannel(channelId);
     setIsChatSidebarOpen(true);
     if (isMobileSidebarOpen) setIsMobileSidebarOpen(false);
@@ -192,6 +195,7 @@ export const Sidebar: React.FC = () => {
                 <button
                   key={section.id}
                   onClick={() => handleSelectSection(section.id)}
+                  onMouseEnter={() => audio.playButtonHover()}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer ${
                     isActive
                       ? 'bg-[#00439c] text-white shadow-md shadow-blue-950/50 font-semibold'
@@ -227,6 +231,7 @@ export const Sidebar: React.FC = () => {
                 <button
                   key={section.id}
                   onClick={() => handleSelectSection(section.id)}
+                  onMouseEnter={() => audio.playButtonHover()}
                   className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all cursor-pointer ${
                     isActive
                       ? 'bg-[#0e244d] text-white border border-blue-500/40 shadow-sm font-semibold'
@@ -270,9 +275,11 @@ export const Sidebar: React.FC = () => {
             <div className="space-y-2">
               <button
                 onClick={() => {
+                  audio.playButtonClick();
                   setIsUploadModalOpen(true);
                   if (isMobileView) setIsMobileSidebarOpen(false);
                 }}
+                onMouseEnter={() => audio.playButtonHover()}
                 className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 to-[#0051ba] text-white hover:from-blue-500 hover:to-blue-600 transition-all shadow-md shadow-blue-900/40 cursor-pointer"
               >
                 <PlusCircle className="w-4 h-4" />
@@ -281,9 +288,11 @@ export const Sidebar: React.FC = () => {
 
               <button
                 onClick={() => {
+                  audio.playButtonClick();
                   setIsTableModalOpen(true);
                   if (isMobileView) setIsMobileSidebarOpen(false);
                 }}
+                onMouseEnter={() => audio.playButtonHover()}
                 className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium bg-[#142344] text-blue-200 hover:bg-[#1a2e59] hover:text-white transition-all border border-blue-900/40 cursor-pointer"
               >
                 <div className="flex items-center gap-2">
@@ -359,9 +368,11 @@ export const Sidebar: React.FC = () => {
       <div className="p-2.5 border-t border-[#152445] bg-[#070e1c] flex items-center justify-between shrink-0">
         <div
           onClick={() => {
+            audio.playButtonClick();
             setIsProfileOpen(true);
             if (isMobileView) setIsMobileSidebarOpen(false);
           }}
+          onMouseEnter={() => audio.playButtonHover()}
           className="flex items-center gap-2.5 flex-1 min-w-0 p-1.5 rounded-xl hover:bg-[#13203c] cursor-pointer transition-colors"
           title="Ver mi perfil de usuario, actividad y guardados"
         >
@@ -396,9 +407,11 @@ export const Sidebar: React.FC = () => {
           {isGuest ? (
             <button
               onClick={() => {
+                audio.playButtonClick();
                 setIsAuthModalOpen(true);
                 if (isMobileView) setIsMobileSidebarOpen(false);
               }}
+              onMouseEnter={() => audio.playButtonHover()}
               className="px-2.5 py-1.5 bg-[#00439c] hover:bg-blue-600 text-white rounded-xl text-[11px] font-bold transition-all shadow-md flex items-center gap-1 cursor-pointer"
               title="Iniciar sesión"
             >
@@ -409,9 +422,11 @@ export const Sidebar: React.FC = () => {
             <>
               <button
                 onClick={() => {
+                  audio.playButtonClick();
                   setIsAuthModalOpen(true);
                   if (isMobileView) setIsMobileSidebarOpen(false);
                 }}
+                onMouseEnter={() => audio.playButtonHover()}
                 className="p-2 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
                 title="Cambiar cuenta o iniciar sesión"
               >
@@ -419,9 +434,11 @@ export const Sidebar: React.FC = () => {
               </button>
               <button
                 onClick={() => {
+                  audio.playButtonClick();
                   logout();
                   if (isMobileView) setIsMobileSidebarOpen(false);
                 }}
+                onMouseEnter={() => audio.playButtonHover()}
                 className="p-2 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition-colors cursor-pointer"
                 title="Cerrar sesión (volver a Invitado)"
               >

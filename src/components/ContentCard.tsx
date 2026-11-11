@@ -3,6 +3,7 @@ import { Star, Download, Heart, Edit, Trash2, ArrowUpRight, Calendar, MapPin, Ha
 import { ContentItem } from '../types';
 import { useApp } from '../context/AppContext';
 import { SafeImage } from './SafeImage';
+import { audio } from '../utils/audioSystem';
 
 interface ContentCardProps {
   item: ContentItem;
@@ -25,12 +26,14 @@ export const ContentCard: React.FC<ContentCardProps> = ({ item }) => {
 
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation();
+    audio.playButtonClick();
     setEditingItem(item);
     setIsUploadModalOpen(true);
   };
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
+    audio.playButtonClick();
     if (confirm(`¿Estás seguro de eliminar "${item.title}"?`)) {
       deleteItem(item.id);
     }
@@ -38,17 +41,23 @@ export const ContentCard: React.FC<ContentCardProps> = ({ item }) => {
 
   const handleLike = (e: React.MouseEvent) => {
     e.stopPropagation();
+    audio.playButtonClick();
     toggleLikeItem(item.id);
   };
 
   const handleToggleFeatured = (e: React.MouseEvent) => {
     e.stopPropagation();
+    audio.playButtonClick();
     toggleFeatured(item.id);
   };
 
   return (
     <div
-      onClick={() => setSelectedItem(item)}
+      onClick={() => {
+        audio.playButtonClick();
+        setSelectedItem(item);
+      }}
+      onMouseEnter={() => audio.playButtonHover()}
       className="group relative bg-[#0b162c] hover:bg-[#101f3e] border border-[#192b4f] hover:border-[#2d4d8c] rounded-2xl overflow-hidden transition-all duration-200 cursor-pointer flex flex-col shadow-lg shadow-black/20"
     >
       {/* Banner Area for 16:9 context */}

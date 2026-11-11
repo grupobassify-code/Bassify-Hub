@@ -16,6 +16,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { ContentCard } from './ContentCard';
 import { SectionType } from '../types';
+import { audio } from '../utils/audioSystem';
 
 export const MainContent: React.FC = () => {
   const {
@@ -116,7 +117,11 @@ export const MainContent: React.FC = () => {
               </div>
 
               <button
-                onClick={() => setIsUploadModalOpen(true)}
+                onClick={() => {
+                  audio.playButtonClick();
+                  setIsUploadModalOpen(true);
+                }}
+                onMouseEnter={() => audio.playButtonHover()}
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-[#00439c] hover:bg-blue-600 text-white transition-all shadow-md flex items-center gap-1.5 whitespace-nowrap cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -139,8 +144,12 @@ export const MainContent: React.FC = () => {
             {genres.map(g => (
               <button
                 key={g}
-                onClick={() => setSelectedGenre(g)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-xl transition-colors whitespace-nowrap shrink-0 ${
+                onClick={() => {
+                  audio.playButtonClick();
+                  setSelectedGenre(g);
+                }}
+                onMouseEnter={() => audio.playButtonHover()}
+                className={`px-3 py-1.5 text-xs font-medium rounded-xl transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   selectedGenre === g
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'bg-[#0c172e] text-slate-400 hover:text-white hover:bg-[#122142]'
