@@ -602,8 +602,9 @@ Return ONLY strict valid JSON matching this structure:
 
   const isProduction = process.env.NODE_ENV === 'production';
   if (!isProduction) {
+    process.env.DISABLE_HMR = 'true';
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: 'spa',
     });
     app.use(vite.middlewares);

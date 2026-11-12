@@ -3,6 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Gracefully ignore benign dev-server WebSocket HMR rejections in Cloud Run iframe
+      window.addEventListener('unhandledrejection', function(event) {
+        var reason = event && event.reason;
+        var msg = (reason && reason.message) || String(reason || '');
+        var stack = (reason && reason.stack) || '';
+        if (
+          msg.indexOf('WebSocket') !== -1 ||
+          msg.indexOf('vite:ws') !== -1 ||
+          stack.indexOf('@vite/client') !== -1
+        ) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      });
+      window.addEventListener('error', function(event) {
+        var msg = (event && event.message) || '';
+        var filename = (event && event.filename) || '';
+        if (
+          msg.indexOf('WebSocket') !== -1 ||
+          filename.indexOf('@vite/client') !== -1
+        ) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      });
+    </script>
     <title>Bassify Play — Red Social & Store</title>
     <meta name="description" content="Mini red social estilo Discord y tienda de juegos, apps, noticias y eventos con gestión administrativa y estética PlayStation azul y blanco." />
     <meta property="og:title" content="Bassify Play — Red Social & Store" />

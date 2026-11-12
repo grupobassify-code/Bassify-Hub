@@ -133,7 +133,7 @@ class AudioSystem {
       const onFirstInteraction = () => {
         this.userInteracted = true;
         if (this.autoplayEnabled && !this.isMusicPlaying) {
-          this.startMusic();
+          this.startMusic().catch(() => {});
         }
         window.removeEventListener('pointerdown', onFirstInteraction);
         window.removeEventListener('keydown', onFirstInteraction);
@@ -301,7 +301,7 @@ class AudioSystem {
     if (this.isMusicPlaying) {
       this.stopMusic();
     } else {
-      this.startMusic();
+      this.startMusic().catch(() => {});
     }
   }
 
@@ -319,7 +319,7 @@ class AudioSystem {
       this.bgAudio.currentTime = 0;
       this.currentTime = 0;
       if (!this.isMusicPlaying) {
-        this.startMusic();
+        this.startMusic().catch(() => {});
       }
       this.notify();
     }
@@ -370,7 +370,7 @@ class AudioSystem {
 
     this.notify();
     if (wasPlaying) {
-      this.startMusic();
+      this.startMusic().catch(() => {});
     }
   }
 
@@ -382,7 +382,7 @@ class AudioSystem {
     this.notify();
     if (this.isMusicPlaying) {
       this.stopMusic();
-      this.startMusic();
+      this.startMusic().catch(() => {});
     }
   }
 
