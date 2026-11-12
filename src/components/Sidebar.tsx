@@ -19,6 +19,8 @@ import {
   X,
   Lock,
   LogOut,
+  Disc,
+  Music,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { SectionType } from '../types';
@@ -45,6 +47,9 @@ export const Sidebar: React.FC = () => {
     setIsMobileSidebarOpen,
     items,
     reports,
+    albums,
+    setIsCreateAlbumModalOpen,
+    setIsCreateSongModalOpen,
   } = useApp();
 
   const pendingReportsCount = reports.filter(r => r.status === 'pending').length;
@@ -74,6 +79,12 @@ export const Sidebar: React.FC = () => {
       label: 'Juegos',
       icon: <Gamepad2 className="w-4 h-4" />,
       count: items.filter(i => i.type === 'game').length,
+    },
+    {
+      id: 'music',
+      label: 'Música & Álbumes',
+      icon: <Music className="w-4 h-4 text-cyan-400" />,
+      count: albums.length,
     },
     {
       id: 'news',
@@ -285,6 +296,36 @@ export const Sidebar: React.FC = () => {
                 <PlusCircle className="w-4 h-4" />
                 Subir Nuevo Contenido
               </button>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => {
+                    audio.playButtonClick();
+                    setIsCreateAlbumModalOpen(true);
+                    if (isMobileView) setIsMobileSidebarOpen(false);
+                  }}
+                  onMouseEnter={() => audio.playButtonHover()}
+                  className="flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-[11px] font-semibold bg-[#11244d] hover:bg-[#18336d] text-cyan-300 border border-cyan-500/30 transition-all cursor-pointer"
+                  title="Crear álbum o playlist"
+                >
+                  <Disc className="w-3.5 h-3.5" />
+                  <span>+ Álbum</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    audio.playButtonClick();
+                    setIsCreateSongModalOpen(true);
+                    if (isMobileView) setIsMobileSidebarOpen(false);
+                  }}
+                  onMouseEnter={() => audio.playButtonHover()}
+                  className="flex items-center justify-center gap-1.5 px-2 py-2 rounded-xl text-[11px] font-semibold bg-[#11244d] hover:bg-[#18336d] text-cyan-300 border border-cyan-500/30 transition-all cursor-pointer"
+                  title="Subir canción MP3"
+                >
+                  <Music className="w-3.5 h-3.5" />
+                  <span>+ Canción</span>
+                </button>
+              </div>
 
               <button
                 onClick={() => {

@@ -6,6 +6,7 @@ import {
   Calendar,
   User,
   MessageSquare,
+  Music,
 } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/Sidebar';
@@ -19,6 +20,8 @@ import { UserProfileModal } from './components/UserProfileModal';
 import { AuthModal } from './components/AuthModal';
 import { ReportModal } from './components/ReportModal';
 import { LinkEditModal } from './components/LinkEditModal';
+import { CreateAlbumModal } from './components/CreateAlbumModal';
+import { CreateSongModal } from './components/CreateSongModal';
 import { Toast } from './components/Toast';
 import { SectionType } from './types';
 import { audio } from './utils/audioSystem';
@@ -57,6 +60,7 @@ const AppLayout: React.FC = () => {
   const mobileNavItems: { id: SectionType; label: string; icon: React.ReactNode }[] = [
     { id: 'games', label: 'Juegos', icon: <Gamepad2 className="w-5 h-5" /> },
     { id: 'apps', label: 'Apps', icon: <Smartphone className="w-5 h-5" /> },
+    { id: 'music', label: 'Música', icon: <Music className="w-5 h-5" /> },
     { id: 'news', label: 'Noticias', icon: <Newspaper className="w-5 h-5" /> },
     { id: 'events', label: 'Eventos', icon: <Calendar className="w-5 h-5" /> },
   ];
@@ -139,6 +143,12 @@ const AppLayout: React.FC = () => {
 
       {/* Admin Quick Game Link Editor Modal */}
       <LinkEditModal />
+
+      {/* Admin Spotify-style Album Creator Modal (512x512 artwork) */}
+      <CreateAlbumModal />
+
+      {/* Admin MP3 Track Creator Modal (Independent 512x512 cover + Album Selector) */}
+      <CreateSongModal />
 
       {/* Action Notifications */}
       <Toast />

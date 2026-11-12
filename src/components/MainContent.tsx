@@ -12,9 +12,11 @@ import {
   Plus,
   ShieldCheck,
   Sparkles,
+  Music,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ContentCard } from './ContentCard';
+import { MusicSection } from './MusicSection';
 import { SectionType } from '../types';
 import { audio } from '../utils/audioSystem';
 
@@ -30,6 +32,10 @@ export const MainContent: React.FC = () => {
     isAdmin,
     setIsUploadModalOpen,
   } = useApp();
+
+  if (activeSection === 'music') {
+    return <MusicSection />;
+  }
 
   const sectionMeta: Record<SectionType, { title: string; subtitle: string; icon: React.ReactNode }> = {
     apps: {
@@ -66,6 +72,11 @@ export const MainContent: React.FC = () => {
       title: 'Actualizaciones & Parches',
       subtitle: 'Últimas versiones lanzadas, optimizaciones de rendimiento y notas de parches recientes',
       icon: <RefreshCw className="w-5 h-5 text-emerald-400" />,
+    },
+    music: {
+      title: 'Música & Álbumes Oficiales',
+      subtitle: 'Colecciones de música estilo Spotify, álbumes y bandas sonoras con carátulas independientes 512x512',
+      icon: <Music className="w-5 h-5 text-cyan-400" />,
     },
   };
 

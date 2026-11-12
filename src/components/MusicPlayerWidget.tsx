@@ -15,6 +15,8 @@ import {
   RotateCcw,
   Radio,
   Repeat,
+  SkipBack,
+  SkipForward,
 } from 'lucide-react';
 import { audio, AudioSystemState, OFFICIAL_BACKGROUND_TRACK } from '../utils/audioSystem';
 
@@ -104,8 +106,8 @@ export const MusicPlayerWidget: React.FC = () => {
     }
   };
 
-  const formatTime = (seconds: number) => {
-    if (isNaN(seconds) || seconds < 0) return '0:00';
+  const formatTime = (seconds?: number) => {
+    if (seconds === undefined || isNaN(seconds) || seconds < 0) return '0:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
@@ -227,17 +229,36 @@ export const MusicPlayerWidget: React.FC = () => {
 
           {/* Current Track Card */}
           <div className="bg-gradient-to-br from-[#0e1d38] to-[#0a162b] border border-[#1c3360] rounded-xl p-3 mb-3 shadow-md">
-            <div className="flex items-center justify-between text-xs font-bold text-white mb-1">
-              <span className="truncate pr-2">{audioState.currentTrackTitle}</span>
-              <span className="text-[10px] bg-blue-900/60 text-cyan-300 px-1.5 py-0.5 rounded font-mono shrink-0">
-                {isOfficialTrack ? 'OST Oficial' : `${audioState.bpm} BPM`}
-              </span>
+            <div className="flex gap-3 items-start mb-2">
+              {audioState.coverUrl && (
+                <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-cyan-500/40 shrink-0 bg-[#070e1c]">
+                  <img
+                    src={audioState.coverUrl}
+                    alt={audioState.currentTrackTitle}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-x-0 bottom-0 bg-black/70 text-[7px] font-mono text-cyan-300 text-center py-0.2">
+                    512×512
+                  </div>
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between text-xs font-bold text-white mb-0.5">
+                  <span className="truncate pr-1">{audioState.currentTrackTitle}</span>
+                  <span className="text-[9px] bg-blue-900/60 text-cyan-300 px-1.5 py-0.2 rounded font-mono shrink-0">
+                    {audioState.hasPlaylist
+                      ? `${audioState.playlistIndex + 1}/${audioState.playlistCount}`
+                      : isOfficialTrack
+                      ? 'OST Oficial'
+                      : `${audioState.bpm} BPM`}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 truncate">
+                  {audioState.artist}
+                  {audioState.albumTitle ? ` • ${audioState.albumTitle}` : ''}
+                </p>
+              </div>
             </div>
-            <p className="text-[11px] text-slate-300 leading-relaxed mb-2">
-              {isOfficialTrack
-                ? 'Canción de fondo oficial de Bassify Hub: ambientación electrónica, sintetizadores y percusión inmersiva.'
-                : 'Groove de bajo slap suave con piano Rhodes y percusión relajada.'}
-            </p>
 
             {/* Scrubber / Timeline for audio file */}
             {isOfficialTrack && (
@@ -246,7 +267,7 @@ export const MusicPlayerWidget: React.FC = () => {
                   <span>{formatTime(audioState.currentTime)}</span>
                   <div className="flex items-center gap-1 text-cyan-400/80">
                     <Repeat className="w-3 h-3" />
-                    <span>Bucle Activo</span>
+                    <span>{audioState.hasPlaylist ? 'Auto-avance' : 'Bucle Activo'}</span>
                   </div>
                   <span>{formatTime(audioState.duration || OFFICIAL_BACKGROUND_TRACK.duration)}</span>
                 </div>
@@ -264,28 +285,56 @@ export const MusicPlayerWidget: React.FC = () => {
 
             {/* Quick playback actions */}
             <div className="mt-2.5 pt-2 border-t border-[#172a4e] flex items-center justify-between">
-              <button
-                onClick={handleTogglePlay}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
-                  audioState.isPlaying
-                    ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm'
-                    : 'bg-[#152a55] hover:bg-[#1c366e] text-cyan-200'
-                }`}
-              >
-                {audioState.isPlaying ? (
-                  <>
-                    <Pause className="w-3.5 h-3.5 fill-current" />
-                    <span>Pausar</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
-                    <span>Reproducir</span>
-                  </>
+              <div className="flex items-center gap-1">
+                {audioState.hasPlaylist && (
+                  <button
+                    onClick={() => {
+                      audio.playButtonClick();
+                      audio.prevTrack();
+                    }}
+                    className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#152a55] transition-colors cursor-pointer"
+                    title="Pista anterior"
+                  >
+                    <SkipBack className="w-4 h-4" />
+                  </button>
                 )}
-              </button>
 
-              {isOfficialTrack && (
+                <button
+                  onClick={handleTogglePlay}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
+                    audioState.isPlaying
+                      ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm'
+                      : 'bg-[#152a55] hover:bg-[#1c366e] text-cyan-200'
+                  }`}
+                >
+                  {audioState.isPlaying ? (
+                    <>
+                      <Pause className="w-3.5 h-3.5 fill-current" />
+                      <span>Pausar</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                      <span>Reproducir</span>
+                    </>
+                  )}
+                </button>
+
+                {audioState.hasPlaylist && (
+                  <button
+                    onClick={() => {
+                      audio.playButtonClick();
+                      audio.nextTrack();
+                    }}
+                    className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-[#152a55] transition-colors cursor-pointer"
+                    title="Siguiente pista"
+                  >
+                    <SkipForward className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {isOfficialTrack && !audioState.hasPlaylist && (
                 <button
                   onClick={handleRestart}
                   className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-white px-2 py-1 rounded hover:bg-[#14264b] transition-colors cursor-pointer"

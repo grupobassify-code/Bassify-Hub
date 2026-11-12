@@ -1,11 +1,45 @@
 export type SectionType =
   | 'apps'
   | 'games'
+  | 'music'
   | 'news'
   | 'events'
   | 'featured'
   | 'in_development'
   | 'updates';
+
+export interface MusicSong {
+  id: string;
+  title: string;
+  artist: string;
+  albumId: string;
+  albumTitle?: string;
+  coverUrl: string; // 512x512 image, independent of album cover
+  audioUrl: string; // MP3 URL or base64 data URL
+  duration: number; // in seconds
+  durationFormatted?: string; // e.g. "3:02"
+  genre?: string;
+  releaseYear?: string;
+  createdAt: string;
+  likes: number;
+  likedBy: string[];
+  isLiked?: boolean;
+}
+
+export interface MusicAlbum {
+  id: string;
+  title: string;
+  artist: string;
+  description: string;
+  coverUrl: string; // 512x512 album image, independent of song images
+  genre: string;
+  releaseYear: string;
+  songsCount?: number;
+  totalDuration?: number;
+  createdAt: string;
+  authorEmail: string;
+  isOfficial?: boolean;
+}
 
 export type ItemType = 'app' | 'game' | 'news' | 'event';
 export type ItemStatus = 'published' | 'in_development' | 'update';
@@ -138,5 +172,7 @@ export interface DatabaseDump {
   reports: ReportItem[];
   chatMessages: ChatMessage[];
   moderationSettings: ModerationSettings;
+  albums?: MusicAlbum[];
+  songs?: MusicSong[];
 }
 

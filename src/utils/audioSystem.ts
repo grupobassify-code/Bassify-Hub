@@ -1,6 +1,6 @@
 // Bassify Hub Audio System & Soundtrack Engine
+// Spotify-style Music Player & Playlist Engine + Ambient Audio
 // Official Background Music: "The Calculated Fall" (Cyberpunk / PlayStation OST)
-// Plus Web Audio API Button Sound FX and generative slap bass mode
 
 export interface AudioSystemState {
   isPlaying: boolean;
@@ -13,6 +13,23 @@ export interface AudioSystemState {
   currentTime: number;
   duration: number;
   audioSrc: string;
+  coverUrl: string;
+  albumTitle: string;
+  songId?: string;
+  hasPlaylist: boolean;
+  playlistCount: number;
+  playlistIndex: number;
+}
+
+export interface PlayableTrack {
+  id: string;
+  title: string;
+  artist: string;
+  audioUrl: string;
+  coverUrl: string;
+  albumId?: string;
+  albumTitle?: string;
+  duration?: number;
 }
 
 type SlapType = 'slap' | 'pop' | 'thumb' | 'ghost';
@@ -85,13 +102,14 @@ export const DEFAULT_SLAP_CHILL_GROOVE: MusicGroove = {
   ],
 };
 
-export const OFFICIAL_BACKGROUND_TRACK = {
-  id: 'the_calculated_fall',
+export const OFFICIAL_BACKGROUND_TRACK: PlayableTrack = {
+  id: 'song_the_calculated_fall',
   title: 'The Calculated Fall',
-  artist: 'Banda Sonora Oficial • Bassify Hub',
-  src: '/assets/aistudio/The_Calculated_Fall_2c310fa9.mp3',
-  fallbackSrc: '/The_Calculated_Fall_2c310fa9.mp3',
-  duration: 182, // 3 minutes 2 seconds
+  artist: 'Bassify Sound Studio',
+  audioUrl: '/assets/aistudio/The_Calculated_Fall_2c310fa9.mp3',
+  coverUrl: '/assets/images/ps_game_scifi_odyssey_1792032420390.jpg',
+  albumTitle: 'Bassify Official Soundtrack Vol. 1',
+  duration: 182,
 };
 
 class AudioSystem {
@@ -102,11 +120,21 @@ class AudioSystem {
   private sfxVolume = 0.25;
   private sfxEnabled = true;
   private mode: 'file' | 'synth' = 'file';
+  
+  // Track metadata
   private currentTrackTitle = OFFICIAL_BACKGROUND_TRACK.title;
   private currentArtist = OFFICIAL_BACKGROUND_TRACK.artist;
-  private audioSrc = OFFICIAL_BACKGROUND_TRACK.src;
+  private audioSrc = OFFICIAL_BACKGROUND_TRACK.audioUrl;
+  private currentCoverUrl = OFFICIAL_BACKGROUND_TRACK.coverUrl;
+  private currentAlbumTitle = OFFICIAL_BACKGROUND_TRACK.albumTitle || 'Banda Sonora Oficial';
+  private currentSongId: string = OFFICIAL_BACKGROUND_TRACK.id;
+  
+  // Playlist / Queue (Spotify-style)
+  private playlist: PlayableTrack[] = [OFFICIAL_BACKGROUND_TRACK];
+  private playlistIndex = 0;
+  
   private currentTime = 0;
-  private duration = OFFICIAL_BACKGROUND_TRACK.duration;
+  private duration = OFFICIAL_BACKGROUND_TRACK.duration || 182;
   private currentGroove: MusicGroove = DEFAULT_SLAP_CHILL_GROOVE;
   private loopTimer: number | null = null;
   private nextLoopTime = 0;
@@ -124,7 +152,6 @@ class AudioSystem {
       if (savedSfx !== null) {
         this.sfxEnabled = savedSfx === 'true';
       }
-      const savedAuto = localStorage.getItem('bassify_music_autoplay');
       this.autoplayEnabled = true;
 
       // 1. Immediately start playing on script load
@@ -148,7 +175,7 @@ class AudioSystem {
         }, { once: true });
       }
 
-      // 3. Global gesture unlock in case browser policy blocks unmuted audio before user interaction
+      // 3. Global gesture unlock
       const onFirstInteraction = () => {
         this.userInteracted = true;
         this.startMusic().catch(() => {});
@@ -166,7 +193,6 @@ class AudioSystem {
   private initAudioElement(): HTMLAudioElement {
     if (!this.bgAudio && typeof window !== 'undefined') {
       this.bgAudio = new Audio(this.audioSrc);
-      this.bgAudio.loop = true;
       this.bgAudio.autoplay = true;
       this.bgAudio.volume = this.musicVolume;
       this.bgAudio.preload = 'auto';
@@ -200,10 +226,27 @@ class AudioSystem {
         }
       });
 
+      // Spotify style: automatically advance to next track in queue when finished
+      this.bgAudio.addEventListener('ended', () => {
+        if (this.playlist.length > 1 && this.playlistIndex < this.playlist.length - 1) {
+          this.nextTrack();
+        } else if (this.playlist.length > 1 && this.playlistIndex === this.playlist.length - 1) {
+          // Loop back to beginning of playlist
+          this.playlistIndex = 0;
+          this.loadAndPlayCurrentPlaylistItem();
+        } else {
+          // Single track loop
+          if (this.bgAudio) {
+            this.bgAudio.currentTime = 0;
+            this.bgAudio.play().catch(() => {});
+          }
+        }
+      });
+
       this.bgAudio.addEventListener('error', (e) => {
-        console.warn('[AudioSystem] Audio src failed, trying fallback:', e);
-        if (this.bgAudio && !this.bgAudio.src.includes(OFFICIAL_BACKGROUND_TRACK.fallbackSrc)) {
-          this.bgAudio.src = OFFICIAL_BACKGROUND_TRACK.fallbackSrc;
+        console.warn('[AudioSystem] Audio error, checking fallback:', e);
+        if (this.bgAudio && !this.bgAudio.src.includes('/The_Calculated_Fall_2c310fa9.mp3')) {
+          this.bgAudio.src = '/The_Calculated_Fall_2c310fa9.mp3';
           if (this.isMusicPlaying) {
             this.bgAudio.play().catch(() => {});
           }
@@ -255,11 +298,17 @@ class AudioSystem {
       currentTime: this.currentTime,
       duration: this.duration,
       audioSrc: this.audioSrc,
+      coverUrl: this.currentCoverUrl,
+      albumTitle: this.currentAlbumTitle,
+      songId: this.currentSongId,
+      hasPlaylist: this.playlist.length > 0,
+      playlistCount: this.playlist.length,
+      playlistIndex: this.playlistIndex,
     };
   }
 
   // ==========================================
-  // PLAYBACK CONTROLS
+  // PLAYBACK & PLAYLIST CONTROLS (SPOTIFY STYLE)
   // ==========================================
 
   public async startMusic() {
@@ -279,12 +328,10 @@ class AudioSystem {
         this.isMusicPlaying = true;
         this.notify();
       } catch (err) {
-        console.warn('[AudioSystem] Playback waiting for interaction:', err);
         this.isMusicPlaying = false;
         this.notify();
       }
     } else {
-      // Synth groove mode
       try {
         const ctx = this.initContext();
         if (this.isMusicPlaying) return;
@@ -293,7 +340,6 @@ class AudioSystem {
         const startTime = ctx.currentTime + 0.05;
         this.scheduleCycle(startTime);
       } catch (e) {
-        console.warn('Could not start synth music:', e);
         this.isMusicPlaying = false;
         this.notify();
       }
@@ -345,6 +391,103 @@ class AudioSystem {
     }
   }
 
+  /**
+   * Play any specific song directly
+   */
+  public playSong(track: PlayableTrack, surroundingPlaylist?: PlayableTrack[]) {
+    this.stopMusic();
+    this.mode = 'file';
+    this.currentSongId = track.id;
+    this.currentTrackTitle = track.title;
+    this.currentArtist = track.artist;
+    this.audioSrc = track.audioUrl || OFFICIAL_BACKGROUND_TRACK.audioUrl;
+    this.currentCoverUrl = track.coverUrl || OFFICIAL_BACKGROUND_TRACK.coverUrl;
+    this.currentAlbumTitle = track.albumTitle || 'Sencillo';
+    this.currentTime = 0;
+    this.duration = track.duration || 180;
+
+    if (surroundingPlaylist && surroundingPlaylist.length > 0) {
+      this.playlist = surroundingPlaylist;
+      const idx = surroundingPlaylist.findIndex(t => t.id === track.id);
+      this.playlistIndex = idx !== -1 ? idx : 0;
+    } else {
+      this.playlist = [track];
+      this.playlistIndex = 0;
+    }
+
+    const audioEl = this.initAudioElement();
+    audioEl.src = this.audioSrc;
+    audioEl.currentTime = 0;
+    audioEl.load();
+
+    this.startMusic().catch(() => {});
+  }
+
+  /**
+   * Play an entire Album from a given index
+   */
+  public playAlbum(
+    album: { id: string; title: string; artist: string; coverUrl: string },
+    songs: PlayableTrack[],
+    startIndex = 0
+  ) {
+    if (!songs || songs.length === 0) return;
+    const validIndex = Math.max(0, Math.min(songs.length - 1, startIndex));
+    const targetSong = songs[validIndex];
+    this.playSong(
+      {
+        ...targetSong,
+        albumTitle: album.title,
+      },
+      songs
+    );
+  }
+
+  /**
+   * Skip to next track in playlist
+   */
+  public nextTrack() {
+    if (this.playlist.length === 0) return;
+    const nextIdx = (this.playlistIndex + 1) % this.playlist.length;
+    this.playlistIndex = nextIdx;
+    this.loadAndPlayCurrentPlaylistItem();
+  }
+
+  /**
+   * Go back to previous track in playlist (or restart if >3s into song)
+   */
+  public prevTrack() {
+    if (this.currentTime > 3) {
+      this.seek(0);
+      return;
+    }
+    if (this.playlist.length === 0) return;
+    const prevIdx = this.playlistIndex > 0 ? this.playlistIndex - 1 : this.playlist.length - 1;
+    this.playlistIndex = prevIdx;
+    this.loadAndPlayCurrentPlaylistItem();
+  }
+
+  private loadAndPlayCurrentPlaylistItem() {
+    const item = this.playlist[this.playlistIndex];
+    if (!item) return;
+
+    this.currentSongId = item.id;
+    this.currentTrackTitle = item.title;
+    this.currentArtist = item.artist;
+    this.audioSrc = item.audioUrl || OFFICIAL_BACKGROUND_TRACK.audioUrl;
+    this.currentCoverUrl = item.coverUrl || OFFICIAL_BACKGROUND_TRACK.coverUrl;
+    if (item.albumTitle) this.currentAlbumTitle = item.albumTitle;
+    this.currentTime = 0;
+    this.duration = item.duration || 180;
+
+    const audioEl = this.initAudioElement();
+    audioEl.src = this.audioSrc;
+    audioEl.currentTime = 0;
+    audioEl.load();
+
+    this.startMusic().catch(() => {});
+  }
+
   public setVolume(vol: number) {
     this.musicVolume = Math.max(0, Math.min(1, vol));
     try {
@@ -368,24 +511,24 @@ class AudioSystem {
     }
   }
 
-  /**
-   * Switch between official audio track file and synth slap bass groove
-   */
   public setTrackMode(mode: 'file' | 'synth') {
     const wasPlaying = this.isMusicPlaying;
     this.stopMusic();
     this.mode = mode;
 
     if (mode === 'file') {
-      this.audioSrc = OFFICIAL_BACKGROUND_TRACK.src;
+      this.audioSrc = OFFICIAL_BACKGROUND_TRACK.audioUrl;
       this.currentTrackTitle = OFFICIAL_BACKGROUND_TRACK.title;
       this.currentArtist = OFFICIAL_BACKGROUND_TRACK.artist;
+      this.currentCoverUrl = OFFICIAL_BACKGROUND_TRACK.coverUrl;
+      this.currentAlbumTitle = OFFICIAL_BACKGROUND_TRACK.albumTitle || 'Banda Sonora Oficial';
       if (this.bgAudio) {
         this.bgAudio.src = this.audioSrc;
       }
     } else {
       this.currentTrackTitle = this.currentGroove.title;
       this.currentArtist = 'Bajo Slap Procedural';
+      this.currentAlbumTitle = 'Groove Lounge';
     }
 
     this.notify();
@@ -399,6 +542,7 @@ class AudioSystem {
     this.mode = 'synth';
     this.currentTrackTitle = groove.title;
     this.currentArtist = 'Bajo Slap Gemini AI';
+    this.currentAlbumTitle = 'Compositor AI';
     this.notify();
     if (this.isMusicPlaying) {
       this.stopMusic();

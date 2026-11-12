@@ -10,6 +10,8 @@ import {
   ReportItem,
   ReportReason,
   ModerationSettings,
+  MusicAlbum,
+  MusicSong,
 } from '../types';
 import {
   ADMIN_EMAIL,
@@ -21,9 +23,12 @@ import {
   INITIAL_CONTENT,
   CHANNELS,
   INITIAL_CHAT_MESSAGES,
+  INITIAL_ALBUMS,
+  INITIAL_SONGS,
 } from '../data/initialData';
 import { DEFAULT_ADMIN_AVATAR, DEFAULT_GUEST_AVATAR } from '../utils/avatars';
 import { censorProfanity } from '../utils/moderation';
+import { audio } from '../utils/audioSystem';
 
 interface ReportingTarget {
   type: 'content' | 'comment' | 'chat';
@@ -111,6 +116,26 @@ interface AppContextType {
   exportDatabase: () => void;
   importDatabase: (jsonData: any) => Promise<boolean>;
 
+  // Music & Albums (Spotify Style)
+  albums: MusicAlbum[];
+  songs: MusicSong[];
+  activeAlbumDetail: MusicAlbum | null;
+  setActiveAlbumDetail: (album: MusicAlbum | null) => void;
+  isCreateAlbumModalOpen: boolean;
+  setIsCreateAlbumModalOpen: (open: boolean) => void;
+  isCreateSongModalOpen: boolean;
+  setIsCreateSongModalOpen: (open: boolean) => void;
+  selectedAlbumForNewSong: string | null;
+  setSelectedAlbumForNewSong: (albumId: string | null) => void;
+  addAlbum: (albumData: Omit<MusicAlbum, 'id' | 'createdAt' | 'songsCount' | 'totalDuration'>) => Promise<void>;
+  updateAlbum: (id: string, updated: Partial<MusicAlbum>) => Promise<void>;
+  deleteAlbum: (id: string) => Promise<void>;
+  addSong: (songData: Omit<MusicSong, 'id' | 'createdAt' | 'likes' | 'likedBy'>) => Promise<void>;
+  updateSong: (id: string, updated: Partial<MusicSong>) => Promise<void>;
+  deleteSong: (id: string) => Promise<void>;
+  toggleLikeSong: (id: string) => void;
+  setSongAsBackground: (song: MusicSong) => void;
+
   // Toast notifications
   toastMessage: string | null;
   showToast: (msg: string) => void;
@@ -126,6 +151,8 @@ const STORAGE_KEY_REPORTS = 'bassify_hub_reports_v6';
 const STORAGE_KEY_MODERATION = 'bassify_hub_moderation_v6';
 const STORAGE_KEY_AUTH_LOCAL = 'bassify_hub_auth_v6';
 const STORAGE_KEY_ADMIN_VERIFIED = 'bassify_admin_verified_v6';
+const STORAGE_KEY_ALBUMS = 'bassify_hub_albums_v6';
+const STORAGE_KEY_SONGS = 'bassify_hub_songs_v6';
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Current user state (defaults to safe Guest mode, never admin by default)
@@ -235,6 +262,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [reportingTarget, setReportingTarget] = useState<ReportingTarget | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Albums & Songs (Spotify Style)
+  const [albums, setAlbums] = useState<MusicAlbum[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_ALBUMS);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_ALBUMS;
+  });
+
+  const [songs, setSongs] = useState<MusicSong[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_SONGS);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return INITIAL_SONGS;
+  });
+
+  const [activeAlbumDetail, setActiveAlbumDetail] = useState<MusicAlbum | null>(null);
+  const [isCreateAlbumModalOpen, setIsCreateAlbumModalOpen] = useState<boolean>(false);
+  const [isCreateSongModalOpen, setIsCreateSongModalOpen] = useState<boolean>(false);
+  const [selectedAlbumForNewSong, setSelectedAlbumForNewSong] = useState<string | null>(null);
+
   // Sync state to LocalStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_CONTENT, JSON.stringify(items));
@@ -256,6 +305,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(STORAGE_KEY_MODERATION, JSON.stringify(moderationSettings));
   }, [moderationSettings]);
 
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_ALBUMS, JSON.stringify(albums));
+  }, [albums]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_SONGS, JSON.stringify(songs));
+  }, [songs]);
+
   // HYDRATE FROM SERVER DATABASE ON LOAD
   useEffect(() => {
     const fetchServerDatabase = async () => {
@@ -271,6 +328,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
           if (Array.isArray(dbData.chatMessages) && dbData.chatMessages.length > 0) {
             setChatMessages(dbData.chatMessages);
+          }
+          if (Array.isArray(dbData.albums) && dbData.albums.length > 0) {
+            setAlbums(dbData.albums);
+          }
+          if (Array.isArray(dbData.songs) && dbData.songs.length > 0) {
+            setSongs(dbData.songs);
           }
           if (dbData.moderationSettings) {
             setModerationSettings(dbData.moderationSettings);
@@ -1089,6 +1152,206 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Ajustes de moderación y filtro actualizados.');
   };
 
+  // ==========================================
+  // MUSIC & ALBUM ACTIONS (SPOTIFY STYLE)
+  // ==========================================
+
+  const addAlbum = async (albumData: Omit<MusicAlbum, 'id' | 'createdAt' | 'songsCount' | 'totalDuration'>) => {
+    if (!isAdmin) {
+      showToast('Acceso denegado: Solo el administrador puede crear álbumes.');
+      return;
+    }
+    const newAlbum: MusicAlbum = {
+      ...albumData,
+      id: 'album_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      songsCount: 0,
+      totalDuration: 0,
+      createdAt: new Date().toISOString(),
+      authorEmail: currentUser.email,
+    };
+    setAlbums(prev => [newAlbum, ...prev]);
+    setIsCreateAlbumModalOpen(false);
+    showToast(`Álbum "${newAlbum.title}" creado con éxito.`);
+    try {
+      await fetch('/api/albums', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newAlbum),
+      });
+    } catch (e) {
+      console.warn('Saved album locally, server offline:', e);
+    }
+  };
+
+  const updateAlbum = async (id: string, updated: Partial<MusicAlbum>) => {
+    if (!isAdmin) {
+      showToast('Acceso denegado: Solo el administrador puede editar álbumes.');
+      return;
+    }
+    setAlbums(prev => prev.map(a => a.id === id ? { ...a, ...updated } : a));
+    if (activeAlbumDetail && activeAlbumDetail.id === id) {
+      setActiveAlbumDetail(prev => prev ? { ...prev, ...updated } : null);
+    }
+    showToast('Álbum actualizado correctamente.');
+    try {
+      await fetch(`/api/albums/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch {}
+  };
+
+  const deleteAlbum = async (id: string) => {
+    if (!isAdmin) {
+      showToast('Acceso denegado: Solo el administrador puede eliminar álbumes.');
+      return;
+    }
+    setAlbums(prev => prev.filter(a => a.id !== id));
+    setSongs(prev => prev.filter(s => s.albumId !== id));
+    if (activeAlbumDetail && activeAlbumDetail.id === id) {
+      setActiveAlbumDetail(null);
+    }
+    showToast('Álbum y sus canciones eliminados.');
+    try {
+      await fetch(`/api/albums/${id}`, { method: 'DELETE' });
+    } catch {}
+  };
+
+  const addSong = async (songData: Omit<MusicSong, 'id' | 'createdAt' | 'likes' | 'likedBy'>) => {
+    if (!isAdmin) {
+      showToast('Acceso denegado: Solo el administrador puede subir canciones.');
+      return;
+    }
+    const targetAlbum = albums.find(a => a.id === songData.albumId);
+    const duration = songData.duration || 182;
+    const mins = Math.floor(duration / 60);
+    const secs = Math.floor(duration % 60);
+    const durationFormatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+    const newSong: MusicSong = {
+      ...songData,
+      id: 'song_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      albumTitle: targetAlbum ? targetAlbum.title : 'Sencillo / Colección',
+      duration,
+      durationFormatted,
+      createdAt: new Date().toISOString(),
+      likes: 0,
+      likedBy: [],
+    };
+
+    setSongs(prev => [newSong, ...prev]);
+
+    // Update album count and duration
+    if (newSong.albumId) {
+      setAlbums(prev => prev.map(a => {
+        if (a.id !== newSong.albumId) return a;
+        return {
+          ...a,
+          songsCount: (a.songsCount || 0) + 1,
+          totalDuration: (a.totalDuration || 0) + duration,
+        };
+      }));
+      if (activeAlbumDetail && activeAlbumDetail.id === newSong.albumId) {
+        setActiveAlbumDetail(prev => prev ? {
+          ...prev,
+          songsCount: (prev.songsCount || 0) + 1,
+          totalDuration: (prev.totalDuration || 0) + duration,
+        } : null);
+      }
+    }
+
+    setIsCreateSongModalOpen(false);
+    showToast(`Canción "${newSong.title}" añadida con éxito.`);
+
+    try {
+      await fetch('/api/songs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSong),
+      });
+    } catch (e) {
+      console.warn('Saved song locally, server offline:', e);
+    }
+  };
+
+  const updateSong = async (id: string, updated: Partial<MusicSong>) => {
+    if (!isAdmin) {
+      showToast('Acceso denegado: Solo el administrador puede editar canciones.');
+      return;
+    }
+    setSongs(prev => prev.map(s => s.id === id ? { ...s, ...updated } : s));
+    showToast('Canción actualizada.');
+    try {
+      await fetch(`/api/songs/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+    } catch {}
+  };
+
+  const deleteSong = async (id: string) => {
+    if (!isAdmin) {
+      showToast('Acceso denegado: Solo el administrador puede eliminar canciones.');
+      return;
+    }
+    const songToDelete = songs.find(s => s.id === id);
+    setSongs(prev => prev.filter(s => s.id !== id));
+
+    if (songToDelete && songToDelete.albumId) {
+      setAlbums(prev => prev.map(a => {
+        if (a.id !== songToDelete.albumId) return a;
+        return {
+          ...a,
+          songsCount: Math.max(0, (a.songsCount || 1) - 1),
+          totalDuration: Math.max(0, (a.totalDuration || 180) - (songToDelete.duration || 180)),
+        };
+      }));
+    }
+
+    showToast('Canción eliminada del álbum.');
+    try {
+      await fetch(`/api/songs/${id}`, { method: 'DELETE' });
+    } catch {}
+  };
+
+  const toggleLikeSong = async (id: string) => {
+    const userEmail = currentUser.email;
+    setSongs(prev => prev.map(s => {
+      if (s.id !== id) return s;
+      const likedBy = s.likedBy || [];
+      const hasLiked = likedBy.includes(userEmail);
+      const newLikedBy = hasLiked ? likedBy.filter(e => e !== userEmail) : [...likedBy, userEmail];
+      return {
+        ...s,
+        likes: hasLiked ? Math.max(0, s.likes - 1) : s.likes + 1,
+        likedBy: newLikedBy,
+      };
+    }));
+
+    try {
+      await fetch(`/api/songs/${id}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail }),
+      });
+    } catch {}
+  };
+
+  const setSongAsBackground = (song: MusicSong) => {
+    audio.playSong({
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      audioUrl: song.audioUrl,
+      coverUrl: song.coverUrl,
+      albumTitle: song.albumTitle,
+      duration: song.duration,
+    });
+    showToast(`🎵 "${song.title}" establecida como música de fondo de la app.`);
+  };
+
   // EXPORT FULL DATABASE
   const exportDatabase = () => {
     const exportData = {
@@ -1210,6 +1473,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateModerationSettings,
         exportDatabase,
         importDatabase,
+        // Music & Albums
+        albums,
+        songs,
+        activeAlbumDetail,
+        setActiveAlbumDetail,
+        isCreateAlbumModalOpen,
+        setIsCreateAlbumModalOpen,
+        isCreateSongModalOpen,
+        setIsCreateSongModalOpen,
+        selectedAlbumForNewSong,
+        setSelectedAlbumForNewSong,
+        addAlbum,
+        updateAlbum,
+        deleteAlbum,
+        addSong,
+        updateSong,
+        deleteSong,
+        toggleLikeSong,
+        setSongAsBackground,
         toastMessage,
         showToast,
       }}

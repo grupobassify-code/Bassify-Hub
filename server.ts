@@ -33,6 +33,8 @@ interface DatabaseSchema {
   items: any[];
   reports: any[];
   chatMessages: any[];
+  albums: any[];
+  songs: any[];
   moderationSettings: {
     autoCensorProfanity: boolean;
     blockOffensiveSubmission: boolean;
@@ -59,6 +61,8 @@ const defaultDb: DatabaseSchema = {
   items: [],
   reports: [],
   chatMessages: [],
+  albums: [],
+  songs: [],
   moderationSettings: {
     autoCensorProfanity: true,
     blockOffensiveSubmission: false,
@@ -85,6 +89,8 @@ const readDatabase = (): DatabaseSchema => {
       parsed.auth = defaultDb.auth;
       writeDatabase(parsed);
     }
+    parsed.albums = parsed.albums || [];
+    parsed.songs = parsed.songs || [];
     return parsed;
   } catch (err) {
     console.error('Error reading database file:', err);
@@ -422,6 +428,140 @@ async function startServer() {
     db.chatMessages = [...(db.chatMessages || []), newMsg];
     writeDatabase(db);
     res.status(201).json(newMsg);
+  });
+
+  // ==========================================
+  // API ROUTES - ALBUMS & PLAYLISTS (SPOTIFY STYLE)
+  // ==========================================
+
+  // Get Albums
+  app.get('/api/albums', (_req: Request, res: Response) => {
+    const db = readDatabase();
+    res.json(db.albums || []);
+  });
+
+  // Create Album
+  app.post('/api/albums', (req: Request, res: Response) => {
+    const db = readDatabase();
+    const newAlbum = {
+      id: 'album_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      createdAt: new Date().toISOString(),
+      songsCount: 0,
+      totalDuration: 0,
+      ...req.body,
+    };
+    db.albums = [newAlbum, ...(db.albums || [])];
+    writeDatabase(db);
+    res.status(201).json(newAlbum);
+  });
+
+  // Update Album
+  app.put('/api/albums/:id', (req: Request, res: Response) => {
+    const db = readDatabase();
+    const { id } = req.params;
+    const idx = (db.albums || []).findIndex((a: any) => a.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Album not found' });
+    }
+    db.albums[idx] = { ...db.albums[idx], ...req.body };
+    writeDatabase(db);
+    res.json(db.albums[idx]);
+  });
+
+  // Delete Album
+  app.delete('/api/albums/:id', (req: Request, res: Response) => {
+    const db = readDatabase();
+    const { id } = req.params;
+    db.albums = (db.albums || []).filter((a: any) => a.id !== id);
+    // Also remove or unlink songs in this album
+    db.songs = (db.songs || []).filter((s: any) => s.albumId !== id);
+    writeDatabase(db);
+    res.json({ success: true, deletedAlbumId: id });
+  });
+
+  // ==========================================
+  // API ROUTES - SONGS (MP3 TRACKS)
+  // ==========================================
+
+  // Get Songs
+  app.get('/api/songs', (_req: Request, res: Response) => {
+    const db = readDatabase();
+    res.json(db.songs || []);
+  });
+
+  // Create Song
+  app.post('/api/songs', (req: Request, res: Response) => {
+    const db = readDatabase();
+    const newSong = {
+      id: 'song_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      createdAt: new Date().toISOString(),
+      likes: 0,
+      likedBy: [],
+      ...req.body,
+    };
+    db.songs = [newSong, ...(db.songs || [])];
+
+    // Update album songs count
+    if (newSong.albumId) {
+      const album = (db.albums || []).find((a: any) => a.id === newSong.albumId);
+      if (album) {
+        album.songsCount = (album.songsCount || 0) + 1;
+        album.totalDuration = (album.totalDuration || 0) + (newSong.duration || 180);
+      }
+    }
+
+    writeDatabase(db);
+    res.status(201).json(newSong);
+  });
+
+  // Update Song
+  app.put('/api/songs/:id', (req: Request, res: Response) => {
+    const db = readDatabase();
+    const { id } = req.params;
+    const idx = (db.songs || []).findIndex((s: any) => s.id === id);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Song not found' });
+    }
+    db.songs[idx] = { ...db.songs[idx], ...req.body };
+    writeDatabase(db);
+    res.json(db.songs[idx]);
+  });
+
+  // Delete Song
+  app.delete('/api/songs/:id', (req: Request, res: Response) => {
+    const db = readDatabase();
+    const { id } = req.params;
+    const songToDelete = (db.songs || []).find((s: any) => s.id === id);
+    db.songs = (db.songs || []).filter((s: any) => s.id !== id);
+
+    // Update album songs count
+    if (songToDelete && songToDelete.albumId) {
+      const album = (db.albums || []).find((a: any) => a.id === songToDelete.albumId);
+      if (album) {
+        album.songsCount = Math.max(0, (album.songsCount || 1) - 1);
+        album.totalDuration = Math.max(0, (album.totalDuration || 180) - (songToDelete.duration || 180));
+      }
+    }
+
+    writeDatabase(db);
+    res.json({ success: true, deletedSongId: id });
+  });
+
+  // Toggle Song Like
+  app.post('/api/songs/:id/like', (req: Request, res: Response) => {
+    const db = readDatabase();
+    const { id } = req.params;
+    const { userEmail } = req.body;
+    const song = (db.songs || []).find((s: any) => s.id === id);
+    if (!song) {
+      return res.status(404).json({ error: 'Song not found' });
+    }
+    const likedBy = song.likedBy || [];
+    const hasLiked = userEmail && likedBy.includes(userEmail);
+    song.likedBy = hasLiked ? likedBy.filter((e: string) => e !== userEmail) : [...likedBy, userEmail];
+    song.likes = hasLiked ? Math.max(0, (song.likes || 1) - 1) : (song.likes || 0) + 1;
+    writeDatabase(db);
+    res.json({ success: true, likes: song.likes, hasLiked: !hasLiked });
   });
 
   // Reset all content (Admin only action)

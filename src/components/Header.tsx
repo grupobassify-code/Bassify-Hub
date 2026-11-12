@@ -30,8 +30,9 @@ export const Header: React.FC = () => {
   const navItems: { id: SectionType; label: string }[] = [
     { id: 'apps', label: '1. Apps' },
     { id: 'games', label: '2. Juegos' },
-    { id: 'news', label: '3. Noticias' },
-    { id: 'events', label: '4. Eventos' },
+    { id: 'music', label: '3. Música' },
+    { id: 'news', label: '4. Noticias' },
+    { id: 'events', label: '5. Eventos' },
     { id: 'featured', label: 'Destacados' },
   ];
 
