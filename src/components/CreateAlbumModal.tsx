@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Disc, Image as ImageIcon, Music, Upload, Sparkles, Check, AlertCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { audio } from '../utils/audioSystem';
+import { processAndUploadImage } from '../utils/mediaUpload';
 
 const PRESET_COVERS = [
   { label: 'Soundwave Studio', url: '/assets/images/ps_app_soundwave_studio_1792032421478.jpg' },
@@ -21,26 +22,31 @@ export const CreateAlbumModal: React.FC = () => {
   const [coverUrl, setCoverUrl] = useState(PRESET_COVERS[0].url);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
 
   if (!isCreateAlbumModalOpen) return null;
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
       setError('Por favor selecciona un archivo de imagen válido (PNG, JPG, WEBP).');
+      e.target.value = '';
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setCoverUrl(reader.result);
-        setError(null);
-      }
-    };
-    reader.readAsDataURL(file);
+    setIsUploadingCover(true);
+    setError(null);
+    try {
+      const { url } = await processAndUploadImage(file, { maxDimension: 512, squareCrop: true });
+      setCoverUrl(url);
+    } catch (err: any) {
+      setError(err?.message || 'No se pudo procesar la portada del álbum.');
+    } finally {
+      setIsUploadingCover(false);
+      e.target.value = '';
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,21 +76,29 @@ export const CreateAlbumModal: React.FC = () => {
     setIsSubmitting(true);
     audio.playButtonClick();
 
-    await addAlbum({
-      title: title.trim(),
-      artist: artist.trim(),
-      genre: genre.trim() || 'Varios',
-      releaseYear: releaseYear.trim() || '2026',
-      description: description.trim() || 'Álbum oficial de la comunidad Bassify Hub.',
-      coverUrl: coverUrl.trim(),
-      isOfficial: true,
-      authorEmail: 'grupobassi@gmail.com',
-    });
+    try {
+      const res = await addAlbum({
+        title: title.trim(),
+        artist: artist.trim(),
+        genre: genre.trim() || 'Varios',
+        releaseYear: releaseYear.trim() || '2026',
+        description: description.trim() || 'Álbum oficial de la comunidad Bassify Hub.',
+        coverUrl: coverUrl.trim(),
+        isOfficial: true,
+        authorEmail: 'grupobassify@gmail.com',
+      });
 
-    setIsSubmitting(false);
-    // Reset fields
-    setTitle('');
-    setDescription('');
+      if (res.success) {
+        setTitle('');
+        setDescription('');
+      } else {
+        setError(res.error || 'No se pudo crear el álbum. Intenta nuevamente.');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Error inesperado al crear el álbum.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -230,8 +244,8 @@ export const CreateAlbumModal: React.FC = () => {
                   </span>
                   <label className="flex items-center justify-center gap-2 px-3 py-2 bg-[#122347] hover:bg-[#1a3266] border border-[#223f7a] rounded-xl text-xs text-cyan-200 cursor-pointer transition-colors">
                     <Upload className="w-3.5 h-3.5" />
-                    <span>Cargar archivo (JPG, PNG, WEBP)</span>
-                    <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+                    <span>{isUploadingCover ? 'Procesando portada...' : 'Cargar archivo (JPG, PNG, WEBP)'}</span>
+                    <input type="file" accept="image/*" onChange={handleFileUpload} disabled={isUploadingCover} className="hidden" />
                   </label>
                 </div>
 
@@ -240,7 +254,7 @@ export const CreateAlbumModal: React.FC = () => {
                     O ingresa la URL de la portada:
                   </span>
                   <input
-                    type="url"
+                    type="text"
                     placeholder="https://... o ruta de imagen"
                     value={coverUrl}
                     onChange={e => setCoverUrl(e.target.value)}
@@ -289,11 +303,11 @@ export const CreateAlbumModal: React.FC = () => {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isUploadingCover}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-[#00439c] to-[#0070d1] hover:brightness-110 active:scale-95 text-white shadow-lg shadow-blue-900/50 transition-all cursor-pointer disabled:opacity-50"
             >
               <Check className="w-4 h-4" />
-              <span>{isSubmitting ? 'Guardando Álbum...' : 'Crear Álbum'}</span>
+              <span>{isUploadingCover ? 'Subiendo Portada...' : isSubmitting ? 'Guardando Álbum...' : 'Crear Álbum'}</span>
             </button>
           </div>
         </form>

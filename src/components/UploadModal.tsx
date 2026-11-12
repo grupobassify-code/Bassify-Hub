@@ -22,6 +22,7 @@ import { ItemType, ItemStatus } from '../types';
 import { ADMIN_EMAIL } from '../data/initialData';
 import { BUNDLED_IMAGES, CONTENT_IMAGE_PRESETS, getSafeImageUrl } from '../utils/images';
 import { SafeImage } from './SafeImage';
+import { processAndUploadImage } from '../utils/mediaUpload';
 
 export const UploadModal: React.FC = () => {
   const {
@@ -29,6 +30,7 @@ export const UploadModal: React.FC = () => {
     setIsUploadModalOpen,
     editingItem,
     setEditingItem,
+    activeSection,
     isAdmin,
     currentUser,
     setIsAuthModalOpen,
@@ -56,12 +58,19 @@ export const UploadModal: React.FC = () => {
   const [eventLocation, setEventLocation] = useState('');
   const [screenshotInput, setScreenshotInput] = useState('');
   const [screenshots, setScreenshots] = useState<string[]>([]);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [isUploadingScreenshots, setIsUploadingScreenshots] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const logoFileRef = useRef<HTMLInputElement>(null);
   const bannerFileRef = useRef<HTMLInputElement>(null);
   const screenshotsFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    setSubmitError(null);
+    setIsSubmitting(false);
     if (editingItem) {
       setType(editingItem.type);
       setStatus(editingItem.status || 'published');
@@ -81,13 +90,28 @@ export const UploadModal: React.FC = () => {
       setEventLocation(editingItem.eventLocation || '');
       setScreenshots((editingItem.screenshots || []).map(s => getSafeImageUrl(s, editingItem.type, editingItem.title)));
     } else {
-      setType('game');
-      setStatus('published');
-      setIsFeatured(false);
+      const defaultType: ItemType =
+        activeSection === 'apps'
+          ? 'app'
+          : activeSection === 'news'
+          ? 'news'
+          : activeSection === 'events'
+          ? 'event'
+          : 'game';
+      const defaultStatus: ItemStatus =
+        activeSection === 'in_development'
+          ? 'in_development'
+          : activeSection === 'updates'
+          ? 'update'
+          : 'published';
+
+      setType(defaultType);
+      setStatus(defaultStatus);
+      setIsFeatured(activeSection === 'featured');
       setUpdateNotes('');
       setTitle('');
       setDeveloper('Bassify Studios');
-      setGenre('Acción');
+      setGenre(defaultType === 'app' ? 'Utilidad' : defaultType === 'news' ? 'Comunicado' : defaultType === 'event' ? 'Torneo' : 'Acción');
       setShortDescription('');
       setDescription('');
       setLogoUrl(BUNDLED_IMAGES.soundwave);
@@ -99,7 +123,7 @@ export const UploadModal: React.FC = () => {
       setEventLocation('');
       setScreenshots([BUNDLED_IMAGES.odyssey, BUNDLED_IMAGES.cyberKart]);
     }
-  }, [editingItem, isUploadModalOpen]);
+  }, [editingItem, isUploadModalOpen, activeSection]);
 
   if (!isUploadModalOpen) return null;
 
@@ -108,9 +132,10 @@ export const UploadModal: React.FC = () => {
     setEditingItem(null);
   };
 
-  // Direct local file upload for Logo (PC or Mobile Photo Library / Files)
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Direct local file upload for Logo (compressed 512x512 & uploaded to server)
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
@@ -118,25 +143,27 @@ export const UploadModal: React.FC = () => {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      showToast('La imagen debe pesar menos de 10 MB.');
+    if (file.size > 20 * 1024 * 1024) {
+      showToast('La imagen debe pesar menos de 20 MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = ev => {
-      if (ev.target?.result) {
-        setLogoUrl(ev.target.result as string);
-        showToast('¡Logo cargado exitosamente desde tu dispositivo!');
-      }
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+    setIsUploadingLogo(true);
+    try {
+      const { url } = await processAndUploadImage(file, { maxDimension: 512, squareCrop: true });
+      setLogoUrl(url);
+      showToast('¡Logo optimizado y cargado exitosamente!');
+    } catch {
+      showToast('No se pudo procesar la imagen del logo.');
+    } finally {
+      setIsUploadingLogo(false);
+    }
   };
 
-  // Direct local file upload for Banner (PC or Mobile)
-  const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Direct local file upload for Banner (compressed 1280px & uploaded to server)
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
@@ -144,28 +171,30 @@ export const UploadModal: React.FC = () => {
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      showToast('La imagen debe pesar menos de 10 MB.');
+    if (file.size > 20 * 1024 * 1024) {
+      showToast('La imagen debe pesar menos de 20 MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = ev => {
-      if (ev.target?.result) {
-        setBannerUrl(ev.target.result as string);
-        showToast('¡Banner horizontal cargado exitosamente!');
-      }
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+    setIsUploadingBanner(true);
+    try {
+      const { url } = await processAndUploadImage(file, { maxDimension: 1280, squareCrop: false });
+      setBannerUrl(url);
+      showToast('¡Banner horizontal optimizado y cargado exitosamente!');
+    } catch {
+      showToast('No se pudo procesar la imagen del banner.');
+    } finally {
+      setIsUploadingBanner(false);
+    }
   };
 
-  // Direct local file upload for Screenshots / Content Gallery (PC or Mobile Photo Library)
-  const handleScreenshotsUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Direct local file upload for Screenshots / Content Gallery
+  const handleScreenshotsUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     const fileList = Array.from(files);
+    e.target.value = '';
     const validFiles = fileList.filter(f => f.type.startsWith('image/'));
 
     if (validFiles.length === 0) {
@@ -173,25 +202,26 @@ export const UploadModal: React.FC = () => {
       return;
     }
 
-    let loaded = 0;
+    setIsUploadingScreenshots(true);
     const newImgs: string[] = [];
-
-    validFiles.forEach(file => {
-      const reader = new FileReader();
-      reader.onload = ev => {
-        if (ev.target?.result) {
-          newImgs.push(ev.target.result as string);
+    try {
+      for (const file of validFiles) {
+        try {
+          const { url } = await processAndUploadImage(file, { maxDimension: 1280, squareCrop: false });
+          newImgs.push(url);
+        } catch {
+          // skip corrupted single image
         }
-        loaded++;
-        if (loaded === validFiles.length) {
-          setScreenshots(prev => [...prev, ...newImgs]);
-          showToast(`¡${newImgs.length} captura(s) agregada(s) desde tu dispositivo!`);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
-
-    e.target.value = '';
+      }
+      if (newImgs.length > 0) {
+        setScreenshots(prev => [...prev, ...newImgs]);
+        showToast(`¡${newImgs.length} captura(s) optimizada(s) y agregada(s)!`);
+      } else {
+        showToast('No se pudieron procesar las imágenes seleccionadas.');
+      }
+    } finally {
+      setIsUploadingScreenshots(false);
+    }
   };
 
   const handleAddScreenshot = () => {
@@ -205,8 +235,9 @@ export const UploadModal: React.FC = () => {
     setScreenshots(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
 
     if (!isAdmin) {
       showToast('Solo grupobassify@gmail.com con contraseña verificada puede publicar.');
@@ -214,12 +245,28 @@ export const UploadModal: React.FC = () => {
     }
 
     if (!title.trim() || !description.trim()) {
+      setSubmitError('Por favor completa el título y la descripción del contenido.');
       showToast('Por favor completa el título y la descripción del contenido.');
+      return;
+    }
+
+    if (isUploadingLogo || isUploadingBanner || isUploadingScreenshots) {
+      showToast('Espera un momento a que terminen de subirse las imágenes...');
       return;
     }
 
     const finalLogo = logoUrl.trim() || BUNDLED_IMAGES.soundwave;
     const finalBanner = bannerUrl.trim() || finalLogo;
+
+    let normalizedUrl = downloadUrl.trim() || '#';
+    if (
+      normalizedUrl !== '#' &&
+      !normalizedUrl.startsWith('http://') &&
+      !normalizedUrl.startsWith('https://') &&
+      !normalizedUrl.startsWith('/')
+    ) {
+      normalizedUrl = `https://${normalizedUrl}`;
+    }
 
     const itemData = {
       type,
@@ -234,26 +281,37 @@ export const UploadModal: React.FC = () => {
       logoUrl: finalLogo,
       bannerUrl: finalBanner,
       screenshots: screenshots.length > 0 ? screenshots : [finalBanner],
-      downloadUrl: downloadUrl.trim() || '#',
+      downloadUrl: normalizedUrl,
       fileSize: fileSize.trim() || '100 MB',
       version: version.trim() || 'v1.0.0',
-      rating: 5.0,
-      reviewCount: 1,
-      downloadsCount: '1.000+',
-      releaseDate: new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }),
+      rating: editingItem?.rating ?? 5.0,
+      reviewCount: editingItem?.reviewCount ?? 0,
+      downloadsCount: editingItem?.downloadsCount ?? '1.000+',
+      releaseDate:
+        editingItem?.releaseDate ||
+        new Date().toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' }),
       eventDate: type === 'event' ? eventDate : undefined,
       eventLocation: type === 'event' ? eventLocation : undefined,
       authorEmail: ADMIN_EMAIL,
       isOfficialBassify: true,
     };
 
-    if (editingItem) {
-      updateItem(editingItem.id, itemData);
-    } else {
-      addItem(itemData);
-    }
+    setIsSubmitting(true);
+    try {
+      const result = editingItem
+        ? await updateItem(editingItem.id, itemData)
+        : await addItem(itemData);
 
-    handleClose();
+      if (result.success) {
+        handleClose();
+      } else {
+        setSubmitError(result.error || 'No se pudo publicar el contenido.');
+      }
+    } catch {
+      setSubmitError('Ocurrió un error al publicar el contenido. Inténtalo de nuevo.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -527,12 +585,13 @@ export const UploadModal: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
+                      disabled={isUploadingLogo}
                       onClick={() => logoFileRef.current?.click()}
-                      className="px-4 py-2.5 bg-gradient-to-r from-[#003791] to-[#0062b8] hover:brightness-110 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-md cursor-pointer"
+                      className="px-4 py-2.5 bg-gradient-to-r from-[#003791] to-[#0062b8] hover:brightness-110 disabled:opacity-60 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition-all shadow-md cursor-pointer"
                     >
                       <FolderOpen className="w-4 h-4" />
                       <Camera className="w-4 h-4" />
-                      <span>Elegir Logo de Fototeca o Archivos</span>
+                      <span>{isUploadingLogo ? 'Optimizando Logo...' : 'Elegir Logo de Fototeca o Archivos'}</span>
                     </button>
                   </div>
 
@@ -579,11 +638,12 @@ export const UploadModal: React.FC = () => {
                   </label>
                   <button
                     type="button"
+                    disabled={isUploadingBanner}
                     onClick={() => bannerFileRef.current?.click()}
-                    className="text-[11px] text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 cursor-pointer"
+                    className="text-[11px] text-blue-400 hover:text-blue-300 disabled:opacity-60 font-semibold flex items-center gap-1 cursor-pointer"
                   >
                     <Camera className="w-3 h-3" />
-                    <span>Fototeca / Archivos</span>
+                    <span>{isUploadingBanner ? 'Subiendo...' : 'Fototeca / Archivos'}</span>
                   </button>
                 </div>
                 <input
@@ -595,11 +655,12 @@ export const UploadModal: React.FC = () => {
                 />
                 <button
                   type="button"
+                  disabled={isUploadingBanner}
                   onClick={() => bannerFileRef.current?.click()}
-                  className="w-full py-2 px-3 bg-[#081022] hover:bg-[#0d1b38] border border-[#1b2e56] hover:border-blue-500/50 rounded-xl text-xs text-blue-200 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  className="w-full py-2 px-3 bg-[#081022] hover:bg-[#0d1b38] disabled:opacity-60 border border-[#1b2e56] hover:border-blue-500/50 rounded-xl text-xs text-blue-200 flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
                   <FolderOpen className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Subir Banner desde el dispositivo</span>
+                  <span>{isUploadingBanner ? 'Optimizando Banner...' : 'Subir Banner desde el dispositivo'}</span>
                 </button>
                 <input
                   type="text"
@@ -616,7 +677,7 @@ export const UploadModal: React.FC = () => {
                 </label>
                 <div className="pt-1">
                   <input
-                    type="url"
+                    type="text"
                     value={downloadUrl}
                     onChange={e => setDownloadUrl(e.target.value)}
                     placeholder="https://tu-juego.com o sitio web oficial..."
@@ -761,14 +822,15 @@ export const UploadModal: React.FC = () => {
                 </div>
                 <button
                   type="button"
+                  disabled={isUploadingScreenshots}
                   onClick={(e) => {
                     e.stopPropagation();
                     screenshotsFileRef.current?.click();
                   }}
-                  className="mt-1 px-4 py-2 bg-[#00439c] hover:bg-blue-600 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
+                  className="mt-1 px-4 py-2 bg-[#00439c] hover:bg-blue-600 disabled:opacity-60 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
                 >
                   <Upload className="w-3.5 h-3.5" />
-                  <span>Seleccionar Fotos del Dispositivo</span>
+                  <span>{isUploadingScreenshots ? 'Optimizando y subiendo...' : 'Seleccionar Fotos del Dispositivo'}</span>
                 </button>
               </div>
 
@@ -821,21 +883,36 @@ export const UploadModal: React.FC = () => {
               )}
             </div>
 
+            {submitError && (
+              <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-500/50 text-rose-200 text-xs flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{submitError}</span>
+              </div>
+            )}
+
             {/* Botones de acción */}
             <div className="pt-3 flex items-center justify-end gap-3 border-t border-[#16274a]">
               <button
                 type="button"
                 onClick={handleClose}
-                className="px-4 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white bg-slate-800/80 transition-colors"
+                disabled={isSubmitting}
+                className="px-4 py-2.5 rounded-xl text-xs font-medium text-slate-400 hover:text-white bg-slate-800/80 transition-colors disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#00439c] hover:bg-blue-600 text-white transition-all shadow-lg shadow-blue-900/40 flex items-center gap-2"
+                disabled={isSubmitting || isUploadingLogo || isUploadingBanner || isUploadingScreenshots}
+                className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#00439c] hover:bg-blue-600 disabled:opacity-60 text-white transition-all shadow-lg shadow-blue-900/40 flex items-center gap-2 cursor-pointer"
               >
                 <Upload className="w-4 h-4" />
-                <span>{editingItem ? 'Guardar Cambios' : 'Publicar en Bassify Hub'}</span>
+                <span>
+                  {isSubmitting
+                    ? 'Publicando...'
+                    : editingItem
+                    ? 'Guardar Cambios'
+                    : 'Publicar en Bassify Hub'}
+                </span>
               </button>
             </div>
           </form>

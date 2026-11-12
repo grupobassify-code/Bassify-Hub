@@ -20,11 +20,15 @@ const __dirname = path.dirname(__filename);
 
 const PORT = 3000;
 const DATA_DIR = path.join(__dirname, 'data');
+const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 const DB_FILE = path.join(DATA_DIR, 'database.json');
 
-// Ensure data directory exists
+// Ensure data & upload directories exist
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
 // Initial DB template
@@ -89,8 +93,14 @@ const readDatabase = (): DatabaseSchema => {
       parsed.auth = defaultDb.auth;
       writeDatabase(parsed);
     }
-    parsed.albums = parsed.albums || [];
-    parsed.songs = parsed.songs || [];
+    parsed.items = Array.isArray(parsed.items) ? parsed.items : [];
+    parsed.reports = Array.isArray(parsed.reports) ? parsed.reports : [];
+    parsed.chatMessages = Array.isArray(parsed.chatMessages) ? parsed.chatMessages : [];
+    parsed.albums = Array.isArray(parsed.albums) ? parsed.albums : [];
+    parsed.songs = Array.isArray(parsed.songs) ? parsed.songs : [];
+    if (!parsed.moderationSettings) {
+      parsed.moderationSettings = defaultDb.moderationSettings;
+    }
     return parsed;
   } catch (err) {
     console.error('Error reading database file:', err);
@@ -103,12 +113,127 @@ const writeDatabase = (data: DatabaseSchema) => {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
     console.error('Error writing to database file:', err);
+    throw err;
   }
 };
 
+// Connected SSE clients for real-time updates to all users
+const sseClients = new Set<Response>();
+
+const broadcastDbUpdate = (eventType: string, payload?: any) => {
+  const data = JSON.stringify({
+    type: eventType,
+    payload,
+    timestamp: Date.now(),
+  });
+  for (const client of sseClients) {
+    try {
+      client.write(`event: db_update\ndata: ${data}\n\n`);
+    } catch {
+      sseClients.delete(client);
+    }
+  }
+};
+
+const normalizeContentItem = (raw: any) => ({
+  ...raw,
+  id: raw.id || `${raw.type || 'item'}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+  createdAt: raw.createdAt || new Date().toISOString(),
+  comments: Array.isArray(raw.comments) ? raw.comments : [],
+  likes: typeof raw.likes === 'number' ? raw.likes : 0,
+  likedBy: Array.isArray(raw.likedBy) ? raw.likedBy : [],
+  screenshots: Array.isArray(raw.screenshots) ? raw.screenshots : [],
+  rating: typeof raw.rating === 'number' ? raw.rating : 5.0,
+  reviewCount: typeof raw.reviewCount === 'number' ? raw.reviewCount : (Array.isArray(raw.comments) ? raw.comments.length : 0),
+});
+
 async function startServer() {
   const app = express();
+
+  // Serve uploaded media files statically
+  app.use('/uploads', express.static(UPLOAD_DIR, { maxAge: '7d' }));
+
+  // Binary file upload endpoint (must be registered before express.json)
+  app.post(
+    '/api/upload',
+    express.raw({ limit: '50mb', type: '*/*' }),
+    (req: Request, res: Response) => {
+      try {
+        const buffer = req.body;
+        if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+          return res.status(400).json({ error: 'Archivo vacío o inválido.' });
+        }
+
+        const contentType = (req.headers['content-type'] || '').toLowerCase();
+        const rawHeaderName = String(req.headers['x-file-name'] || 'upload');
+        let decodedName = rawHeaderName;
+        try {
+          decodedName = decodeURIComponent(rawHeaderName);
+        } catch {
+          // keep raw
+        }
+
+        const extFromName = path.extname(decodedName).toLowerCase().replace(/[^a-z0-9.]/g, '');
+        let ext = extFromName;
+        if (!ext) {
+          if (contentType.includes('png')) ext = '.png';
+          else if (contentType.includes('webp')) ext = '.webp';
+          else if (contentType.includes('gif')) ext = '.gif';
+          else if (contentType.includes('jpeg') || contentType.includes('jpg')) ext = '.jpg';
+          else if (contentType.includes('mpeg') || contentType.includes('mp3')) ext = '.mp3';
+          else if (contentType.includes('wav')) ext = '.wav';
+          else if (contentType.includes('ogg')) ext = '.ogg';
+          else ext = '.bin';
+        }
+
+        const allowedExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp3', '.wav', '.ogg', '.m4a', '.aac'];
+        if (!allowedExts.includes(ext)) {
+          return res.status(400).json({ error: 'Tipo de archivo no soportado.' });
+        }
+
+        const baseName = path
+          .basename(decodedName, path.extname(decodedName))
+          .replace(/[^a-zA-Z0-9_-]/g, '_')
+          .slice(0, 40) || 'media';
+        const finalName = `${baseName}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}${ext}`;
+        const filePath = path.join(UPLOAD_DIR, finalName);
+
+        fs.writeFileSync(filePath, buffer);
+        return res.status(201).json({ success: true, url: `/uploads/${finalName}` });
+      } catch (err) {
+        console.error('Upload error:', err);
+        return res.status(500).json({ error: 'Error al guardar el archivo en el servidor.' });
+      }
+    }
+  );
+
   app.use(express.json({ limit: '50mb' }));
+
+  // Server-Sent Events endpoint for live multi-user sync
+  app.get('/api/events', (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    sseClients.add(res);
+    res.write(`event: connected\ndata: ${JSON.stringify({ ok: true, clients: sseClients.size })}\n\n`);
+
+    const keepAlive = setInterval(() => {
+      try {
+        res.write(': keepalive\n\n');
+      } catch {
+        clearInterval(keepAlive);
+        sseClients.delete(res);
+      }
+    }, 25000);
+
+    req.on('close', () => {
+      clearInterval(keepAlive);
+      sseClients.delete(res);
+    });
+  });
 
   // ==========================================
   // API ROUTES - AUTH & ACCOUNT SECURITY
@@ -303,35 +428,78 @@ async function startServer() {
     res.json({ status: 'ok', serverTime: new Date().toISOString() });
   });
 
-  // Get full database
+  // Get full database (public hub state, excluding auth secrets)
   app.get('/api/db', (_req: Request, res: Response) => {
     const db = readDatabase();
-    res.json(db);
+    res.json({
+      version: db.version,
+      items: (db.items || []).map(normalizeContentItem),
+      reports: db.reports || [],
+      chatMessages: db.chatMessages || [],
+      albums: db.albums || [],
+      songs: db.songs || [],
+      moderationSettings: db.moderationSettings || defaultDb.moderationSettings,
+    });
   });
 
   // Save / Sync items
   app.post('/api/items', (req: Request, res: Response) => {
-    const db = readDatabase();
-    const newItem = req.body;
-    if (!newItem.id) {
-      newItem.id = 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+    try {
+      const db = readDatabase();
+      const newItem = normalizeContentItem(req.body);
+      // Idempotency guard
+      const existsIdx = db.items.findIndex((i: any) => i.id === newItem.id);
+      if (existsIdx !== -1) {
+        db.items[existsIdx] = newItem;
+      } else {
+        db.items = [newItem, ...db.items];
+      }
+      writeDatabase(db);
+      broadcastDbUpdate('item:created', newItem);
+      res.status(201).json(newItem);
+    } catch (err) {
+      console.error('Error creating item:', err);
+      res.status(500).json({ error: 'No se pudo guardar el contenido en la base de datos.' });
     }
-    db.items = [newItem, ...db.items];
-    writeDatabase(db);
-    res.status(201).json(newItem);
   });
 
   // Update item
   app.put('/api/items/:id', (req: Request, res: Response) => {
+    try {
+      const db = readDatabase();
+      const { id } = req.params;
+      const index = db.items.findIndex((i: any) => i.id === id);
+      if (index === -1) {
+        return res.status(404).json({ error: 'Item not found' });
+      }
+      db.items[index] = normalizeContentItem({ ...db.items[index], ...req.body, id });
+      writeDatabase(db);
+      broadcastDbUpdate('item:updated', db.items[index]);
+      res.json(db.items[index]);
+    } catch (err) {
+      console.error('Error updating item:', err);
+      res.status(500).json({ error: 'No se pudo actualizar el contenido.' });
+    }
+  });
+
+  // Like / Unlike item
+  app.post('/api/items/:id/like', (req: Request, res: Response) => {
     const db = readDatabase();
     const { id } = req.params;
+    const { userEmail } = req.body || {};
     const index = db.items.findIndex((i: any) => i.id === id);
     if (index === -1) {
       return res.status(404).json({ error: 'Item not found' });
     }
-    db.items[index] = { ...db.items[index], ...req.body };
+    const item = normalizeContentItem(db.items[index]);
+    const likedBy = item.likedBy || [];
+    const hasLiked = userEmail && likedBy.includes(userEmail);
+    item.likedBy = hasLiked ? likedBy.filter((e: string) => e !== userEmail) : [...likedBy, userEmail || 'guest'];
+    item.likes = hasLiked ? Math.max(0, item.likes - 1) : item.likes + 1;
+    db.items[index] = item;
     writeDatabase(db);
-    res.json(db.items[index]);
+    broadcastDbUpdate('item:updated', item);
+    res.json(item);
   });
 
   // Delete item
@@ -339,9 +507,9 @@ async function startServer() {
     const db = readDatabase();
     const { id } = req.params;
     db.items = db.items.filter((i: any) => i.id !== id);
-    // Also remove related reports
     db.reports = db.reports.filter((r: any) => r.targetId !== id);
     writeDatabase(db);
+    broadcastDbUpdate('item:deleted', { id });
     res.json({ success: true, deletedId: id });
   });
 
@@ -350,30 +518,65 @@ async function startServer() {
     const db = readDatabase();
     const { id } = req.params;
     const comment = req.body;
-    const item = db.items.find((i: any) => i.id === id);
-    if (!item) {
+    const itemIndex = db.items.findIndex((i: any) => i.id === id);
+    if (itemIndex === -1) {
       return res.status(404).json({ error: 'Item not found' });
     }
+    const item = normalizeContentItem(db.items[itemIndex]);
     if (!comment.id) {
       comment.id = 'cmt_' + Date.now();
     }
-    item.comments = [comment, ...(item.comments || [])];
-    item.reviewCount = (item.comments || []).length;
+    if (!item.comments.some((c: any) => c.id === comment.id)) {
+      const rating = Number(comment.rating) || 5;
+      const prevCount = item.reviewCount || item.comments.length;
+      item.comments = [comment, ...item.comments];
+      item.reviewCount = item.comments.length;
+      item.rating = Number((((item.rating || 5) * prevCount + rating) / (prevCount + 1)).toFixed(1));
+    }
+    db.items[itemIndex] = item;
     writeDatabase(db);
+    broadcastDbUpdate('item:updated', item);
     res.status(201).json(comment);
+  });
+
+  // Like / Unlike Comment
+  app.post('/api/items/:id/comments/:commentId/like', (req: Request, res: Response) => {
+    const db = readDatabase();
+    const { id, commentId } = req.params;
+    const { userEmail } = req.body || {};
+    const itemIndex = db.items.findIndex((i: any) => i.id === id);
+    if (itemIndex === -1) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    const item = normalizeContentItem(db.items[itemIndex]);
+    item.comments = item.comments.map((c: any) => {
+      if (c.id !== commentId) return c;
+      const likedBy = c.likedBy || [];
+      const hasLiked = userEmail && likedBy.includes(userEmail);
+      return {
+        ...c,
+        likes: hasLiked ? Math.max(0, (c.likes || 1) - 1) : (c.likes || 0) + 1,
+        likedBy: hasLiked ? likedBy.filter((e: string) => e !== userEmail) : [...likedBy, userEmail || 'guest'],
+      };
+    });
+    db.items[itemIndex] = item;
+    writeDatabase(db);
+    broadcastDbUpdate('item:updated', item);
+    res.json(item);
   });
 
   // Delete Comment from item
   app.delete('/api/items/:id/comments/:commentId', (req: Request, res: Response) => {
     const db = readDatabase();
     const { id, commentId } = req.params;
-    const item = db.items.find((i: any) => i.id === id);
-    if (!item) {
+    const itemIndex = db.items.findIndex((i: any) => i.id === id);
+    if (itemIndex === -1) {
       return res.status(404).json({ error: 'Item not found' });
     }
-    item.comments = (item.comments || []).filter((c: any) => c.id !== commentId);
+    const item = normalizeContentItem(db.items[itemIndex]);
+    item.comments = item.comments.filter((c: any) => c.id !== commentId);
     item.reviewCount = item.comments.length;
-    // Mark associated reports as resolved/action taken
+    db.items[itemIndex] = item;
     db.reports.forEach((r: any) => {
       if (r.targetId === commentId) {
         r.status = 'action_taken';
@@ -381,6 +584,7 @@ async function startServer() {
       }
     });
     writeDatabase(db);
+    broadcastDbUpdate('item:updated', item);
     res.json({ success: true, deletedCommentId: commentId });
   });
 
@@ -388,13 +592,14 @@ async function startServer() {
   app.post('/api/reports', (req: Request, res: Response) => {
     const db = readDatabase();
     const newReport = {
-      id: 'rep_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      id: req.body?.id || 'rep_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       status: 'pending',
       createdAt: new Date().toISOString(),
       ...req.body,
     };
-    db.reports = [newReport, ...(db.reports || [])];
+    db.reports = [newReport, ...(db.reports || []).filter((r: any) => r.id !== newReport.id)];
     writeDatabase(db);
+    broadcastDbUpdate('report:created', newReport);
     res.status(201).json(newReport);
   });
 
@@ -414,19 +619,35 @@ async function startServer() {
     }
     db.reports[reportIndex] = { ...db.reports[reportIndex], ...req.body };
     writeDatabase(db);
+    broadcastDbUpdate('report:updated', db.reports[reportIndex]);
     res.json(db.reports[reportIndex]);
+  });
+
+  // Update Moderation Settings
+  app.put('/api/moderation', (req: Request, res: Response) => {
+    const db = readDatabase();
+    db.moderationSettings = {
+      ...(db.moderationSettings || defaultDb.moderationSettings),
+      ...req.body,
+    };
+    writeDatabase(db);
+    broadcastDbUpdate('moderation:updated', db.moderationSettings);
+    res.json(db.moderationSettings);
   });
 
   // Post Chat Message
   app.post('/api/chat', (req: Request, res: Response) => {
     const db = readDatabase();
     const newMsg = {
-      id: 'msg_' + Date.now(),
+      id: req.body?.id || 'msg_' + Date.now(),
       timestamp: 'Hoy a las ' + new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
       ...req.body,
     };
-    db.chatMessages = [...(db.chatMessages || []), newMsg];
+    if (!(db.chatMessages || []).some((m: any) => m.id === newMsg.id)) {
+      db.chatMessages = [...(db.chatMessages || []), newMsg];
+    }
     writeDatabase(db);
+    broadcastDbUpdate('chat:created', newMsg);
     res.status(201).json(newMsg);
   });
 
@@ -442,17 +663,28 @@ async function startServer() {
 
   // Create Album
   app.post('/api/albums', (req: Request, res: Response) => {
-    const db = readDatabase();
-    const newAlbum = {
-      id: 'album_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-      createdAt: new Date().toISOString(),
-      songsCount: 0,
-      totalDuration: 0,
-      ...req.body,
-    };
-    db.albums = [newAlbum, ...(db.albums || [])];
-    writeDatabase(db);
-    res.status(201).json(newAlbum);
+    try {
+      const db = readDatabase();
+      const newAlbum = {
+        id: req.body?.id || 'album_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        createdAt: new Date().toISOString(),
+        songsCount: 0,
+        totalDuration: 0,
+        ...req.body,
+      };
+      const idx = (db.albums || []).findIndex((a: any) => a.id === newAlbum.id);
+      if (idx !== -1) {
+        db.albums[idx] = newAlbum;
+      } else {
+        db.albums = [newAlbum, ...(db.albums || [])];
+      }
+      writeDatabase(db);
+      broadcastDbUpdate('album:created', newAlbum);
+      res.status(201).json(newAlbum);
+    } catch (err) {
+      console.error('Error creating album:', err);
+      res.status(500).json({ error: 'No se pudo guardar el álbum.' });
+    }
   });
 
   // Update Album
@@ -465,6 +697,7 @@ async function startServer() {
     }
     db.albums[idx] = { ...db.albums[idx], ...req.body };
     writeDatabase(db);
+    broadcastDbUpdate('album:updated', db.albums[idx]);
     res.json(db.albums[idx]);
   });
 
@@ -473,9 +706,9 @@ async function startServer() {
     const db = readDatabase();
     const { id } = req.params;
     db.albums = (db.albums || []).filter((a: any) => a.id !== id);
-    // Also remove or unlink songs in this album
     db.songs = (db.songs || []).filter((s: any) => s.albumId !== id);
     writeDatabase(db);
+    broadcastDbUpdate('album:deleted', { id });
     res.json({ success: true, deletedAlbumId: id });
   });
 
@@ -491,27 +724,33 @@ async function startServer() {
 
   // Create Song
   app.post('/api/songs', (req: Request, res: Response) => {
-    const db = readDatabase();
-    const newSong = {
-      id: 'song_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-      createdAt: new Date().toISOString(),
-      likes: 0,
-      likedBy: [],
-      ...req.body,
-    };
-    db.songs = [newSong, ...(db.songs || [])];
-
-    // Update album songs count
-    if (newSong.albumId) {
-      const album = (db.albums || []).find((a: any) => a.id === newSong.albumId);
-      if (album) {
-        album.songsCount = (album.songsCount || 0) + 1;
-        album.totalDuration = (album.totalDuration || 0) + (newSong.duration || 180);
+    try {
+      const db = readDatabase();
+      const newSong = {
+        id: req.body?.id || 'song_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+        createdAt: new Date().toISOString(),
+        likes: 0,
+        likedBy: [],
+        ...req.body,
+      };
+      const exists = (db.songs || []).some((s: any) => s.id === newSong.id);
+      if (!exists) {
+        db.songs = [newSong, ...(db.songs || [])];
+        if (newSong.albumId) {
+          const album = (db.albums || []).find((a: any) => a.id === newSong.albumId);
+          if (album) {
+            album.songsCount = (album.songsCount || 0) + 1;
+            album.totalDuration = (album.totalDuration || 0) + (newSong.duration || 180);
+          }
+        }
       }
+      writeDatabase(db);
+      broadcastDbUpdate('song:created', newSong);
+      res.status(201).json(newSong);
+    } catch (err) {
+      console.error('Error creating song:', err);
+      res.status(500).json({ error: 'No se pudo guardar la canción.' });
     }
-
-    writeDatabase(db);
-    res.status(201).json(newSong);
   });
 
   // Update Song
@@ -524,6 +763,7 @@ async function startServer() {
     }
     db.songs[idx] = { ...db.songs[idx], ...req.body };
     writeDatabase(db);
+    broadcastDbUpdate('song:updated', db.songs[idx]);
     res.json(db.songs[idx]);
   });
 
@@ -534,7 +774,6 @@ async function startServer() {
     const songToDelete = (db.songs || []).find((s: any) => s.id === id);
     db.songs = (db.songs || []).filter((s: any) => s.id !== id);
 
-    // Update album songs count
     if (songToDelete && songToDelete.albumId) {
       const album = (db.albums || []).find((a: any) => a.id === songToDelete.albumId);
       if (album) {
@@ -544,6 +783,7 @@ async function startServer() {
     }
 
     writeDatabase(db);
+    broadcastDbUpdate('song:deleted', { id, albumId: songToDelete?.albumId, duration: songToDelete?.duration });
     res.json({ success: true, deletedSongId: id });
   });
 
@@ -561,6 +801,7 @@ async function startServer() {
     song.likedBy = hasLiked ? likedBy.filter((e: string) => e !== userEmail) : [...likedBy, userEmail];
     song.likes = hasLiked ? Math.max(0, (song.likes || 1) - 1) : (song.likes || 0) + 1;
     writeDatabase(db);
+    broadcastDbUpdate('song:updated', song);
     res.json({ success: true, likes: song.likes, hasLiked: !hasLiked });
   });
 
@@ -569,6 +810,7 @@ async function startServer() {
     const db = readDatabase();
     db.items = [];
     writeDatabase(db);
+    broadcastDbUpdate('db:reset');
     res.json({ success: true, message: 'Catálogo vaciado.' });
   });
 
@@ -587,8 +829,16 @@ async function startServer() {
       if (!imported || !Array.isArray(imported.items)) {
         return res.status(400).json({ error: 'Formato de base de datos inválido' });
       }
-      writeDatabase(imported);
-      res.json({ success: true, count: imported.items.length });
+      const current = readDatabase();
+      const merged: DatabaseSchema = {
+        ...current,
+        ...imported,
+        items: imported.items.map(normalizeContentItem),
+        auth: imported.auth || current.auth,
+      };
+      writeDatabase(merged);
+      broadcastDbUpdate('db:imported');
+      res.json({ success: true, count: merged.items.length });
     } catch {
       res.status(500).json({ error: 'Error al importar la base de datos' });
     }

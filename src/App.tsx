@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { Component, ErrorInfo, ReactNode, useEffect } from 'react';
 import {
   Gamepad2,
   Smartphone,
@@ -7,6 +7,8 @@ import {
   User,
   MessageSquare,
   Music,
+  AlertTriangle,
+  RotateCcw,
 } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Sidebar } from './components/Sidebar';
@@ -156,10 +158,81 @@ const AppLayout: React.FC = () => {
   );
 };
 
+interface ErrorBoundaryState {
+  hasError: boolean;
+  errorMessage: string;
+}
+
+class ErrorBoundary extends Component<{ children: ReactNode }, ErrorBoundaryState> {
+  state: ErrorBoundaryState = {
+    hasError: false,
+    errorMessage: '',
+  };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return {
+      hasError: true,
+      errorMessage: error?.message || 'Error inesperado en la interfaz.',
+    };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('Bassify UI ErrorBoundary:', error, info);
+  }
+
+  handleRecover = () => {
+    try {
+      // Clear potentially oversized local cache keys while preserving user session
+      localStorage.removeItem('bassify_hub_items_v1');
+      localStorage.removeItem('bassify_hub_albums_v1');
+      localStorage.removeItem('bassify_hub_songs_v1');
+    } catch {
+      // ignore storage errors
+    }
+    this.setState({ hasError: false, errorMessage: '' });
+    window.location.reload();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen w-screen bg-[#070e1c] text-slate-100 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-[#0b162c] border border-[#1d3461] rounded-2xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h2 className="text-lg font-bold text-white">Algo salió mal al actualizar la vista</h2>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Tus publicaciones guardadas en el servidor siguen intactas. Haz clic en recuperar para sincronizar y recargar la página.
+            </p>
+            {this.state.errorMessage && (
+              <p className="text-[11px] font-mono text-rose-300 bg-rose-950/40 border border-rose-900/40 rounded-lg p-2 break-words">
+                {this.state.errorMessage}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={this.handleRecover}
+              className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Recuperar y Recargar Bassify Hub</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <AppProvider>
-      <AppLayout />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <AppLayout />
+      </AppProvider>
+    </ErrorBoundary>
   );
 }

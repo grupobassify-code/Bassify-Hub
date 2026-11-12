@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getSafeImageUrl, createSvgPlaceholder } from '../utils/images';
 
 interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
@@ -16,6 +16,10 @@ export const SafeImage: React.FC<SafeImageProps> = ({
 }) => {
   const [hasError, setHasError] = useState(false);
   const safeSrc = getSafeImageUrl(src, itemType, fallbackTitle);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
 
   const handleError = () => {
     if (!hasError) {

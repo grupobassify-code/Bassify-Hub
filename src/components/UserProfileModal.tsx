@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   X,
   User,
@@ -30,6 +30,7 @@ import { useApp } from '../context/AppContext';
 import { ContentItem } from '../types';
 import { DEFAULT_FIGURE_AVATARS, DEFAULT_ADMIN_AVATAR, DEFAULT_GUEST_AVATAR } from '../utils/avatars';
 import { ADMIN_EMAIL } from '../data/initialData';
+import { processAndUploadImage } from '../utils/mediaUpload';
 
 export const UserProfileModal: React.FC = () => {
   const {
@@ -67,7 +68,16 @@ export const UserProfileModal: React.FC = () => {
   const [bio, setBio] = useState(currentUser.bio || '');
   const [customUrlInput, setCustomUrlInput] = useState('');
   const [showCustomUrlInput, setShowCustomUrlInput] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isProfileOpen) {
+      setName(currentUser.name);
+      setAvatar(currentUser.avatar);
+      setBio(currentUser.bio || '');
+    }
+  }, [isProfileOpen, currentUser.name, currentUser.avatar, currentUser.bio]);
 
   if (!isProfileOpen) return null;
 
@@ -75,20 +85,20 @@ export const UserProfileModal: React.FC = () => {
   const bookmarkedItems = items.filter(i => (currentUser.bookmarks || []).includes(i.id));
 
   // User uploaded items
-  const userUploads = items.filter(i => i.authorEmail.toLowerCase() === currentUser.email.toLowerCase());
+  const userUploads = items.filter(i => (i.authorEmail || '').toLowerCase() === currentUser.email.toLowerCase());
 
   // User comments activity
   const userComments: { item: ContentItem; comment: any }[] = [];
   items.forEach(item => {
-    item.comments.forEach(c => {
-      if (c.authorEmail.toLowerCase() === currentUser.email.toLowerCase()) {
+    (item.comments || []).forEach(c => {
+      if ((c.authorEmail || '').toLowerCase() === currentUser.email.toLowerCase()) {
         userComments.push({ item, comment: c });
       }
     });
   });
 
   // User liked items
-  const likedItems = items.filter(i => i.likedBy.includes(currentUser.email));
+  const likedItems = items.filter(i => (i.likedBy || []).includes(currentUser.email));
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,29 +112,27 @@ export const UserProfileModal: React.FC = () => {
   };
 
   // Handle local image file upload (great for mobile smartphones and desktop)
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
       showToast('Por favor selecciona un archivo de imagen válido.');
+      e.target.value = '';
       return;
     }
 
-    if (file.size > 3 * 1024 * 1024) {
-      showToast('La imagen debe pesar menos de 3 MB para guardarse en el perfil.');
-      return;
+    setIsUploadingAvatar(true);
+    try {
+      const { url } = await processAndUploadImage(file, { maxDimension: 512, squareCrop: true });
+      setAvatar(url);
+      showToast('Foto cargada y optimizada. Haz clic en Guardar Ajustes.');
+    } catch {
+      showToast('No se pudo procesar la foto seleccionada.');
+    } finally {
+      setIsUploadingAvatar(false);
+      e.target.value = '';
     }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (result) {
-        setAvatar(result);
-        showToast('Foto cargada desde tu dispositivo. Haz clic en Guardar Ajustes.');
-      }
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleApplyCustomUrl = () => {
@@ -553,11 +561,12 @@ export const UserProfileModal: React.FC = () => {
                       />
                       <button
                         type="button"
+                        disabled={isUploadingAvatar}
                         onClick={() => fileInputRef.current?.click()}
-                        className="px-3.5 py-2 bg-[#14264c] hover:bg-[#1c366d] text-blue-200 hover:text-white rounded-xl text-xs font-semibold border border-[#234282] transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                        className="px-3.5 py-2 bg-[#14264c] hover:bg-[#1c366d] disabled:opacity-50 text-blue-200 hover:text-white rounded-xl text-xs font-semibold border border-[#234282] transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
                       >
                         <Camera className="w-3.5 h-3.5" />
-                        <span>Elegir de Fototeca o Archivos</span>
+                        <span>{isUploadingAvatar ? 'Optimizando foto...' : 'Elegir de Fototeca o Archivos'}</span>
                       </button>
 
                       <button
@@ -576,7 +585,7 @@ export const UserProfileModal: React.FC = () => {
                 {showCustomUrlInput && (
                   <div className="p-3 rounded-xl bg-[#0b162c] border border-blue-900/40 flex items-center gap-2">
                     <input
-                      type="url"
+                      type="text"
                       value={customUrlInput}
                       onChange={e => setCustomUrlInput(e.target.value)}
                       placeholder="https://ejemplo.com/mi-avatar.png"

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Music, Upload, Image as ImageIcon, Disc, Check, AlertCircle, Play, Pause } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { audio } from '../utils/audioSystem';
+import { processAndUploadImage, uploadAudioFile } from '../utils/mediaUpload';
 
 const PRESET_SONG_COVERS = [
   { label: 'Sci-Fi Odyssey', url: '/assets/images/ps_game_scifi_odyssey_1792032420390.jpg' },
@@ -30,6 +31,8 @@ export const CreateSongModal: React.FC = () => {
   const [duration, setDuration] = useState(182);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   const [previewPlaying, setPreviewPlaying] = useState(false);
   const [previewAudioEl, setPreviewAudioEl] = useState<HTMLAudioElement | null>(null);
 
@@ -44,26 +47,30 @@ export const CreateSongModal: React.FC = () => {
 
   if (!isCreateSongModalOpen) return null;
 
-  const handleSongCoverUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSongCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
       setError('Por favor selecciona un archivo de imagen válido (PNG, JPG, WEBP).');
+      e.target.value = '';
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setCoverUrl(reader.result);
-        setError(null);
-      }
-    };
-    reader.readAsDataURL(file);
+    setIsUploadingCover(true);
+    setError(null);
+    try {
+      const { url } = await processAndUploadImage(file, { maxDimension: 512, squareCrop: true });
+      setCoverUrl(url);
+    } catch (err: any) {
+      setError(err?.message || 'No se pudo procesar la carátula de la canción.');
+    } finally {
+      setIsUploadingCover(false);
+      e.target.value = '';
+    }
   };
 
-  const handleAudioFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAudioFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -76,22 +83,29 @@ export const CreateSongModal: React.FC = () => {
       setTitle(cleanName);
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        const dataUrl = reader.result;
-        setAudioUrl(dataUrl);
-
-        // Detect duration from audio file
-        const tempAudio = new Audio(dataUrl);
-        tempAudio.addEventListener('loadedmetadata', () => {
-          if (tempAudio.duration && !isNaN(tempAudio.duration)) {
-            setDuration(Math.round(tempAudio.duration));
-          }
-        });
+    // Detect duration quickly via local objectURL
+    const objUrl = URL.createObjectURL(file);
+    const tempAudio = new Audio(objUrl);
+    tempAudio.addEventListener('loadedmetadata', () => {
+      if (tempAudio.duration && !isNaN(tempAudio.duration)) {
+        setDuration(Math.round(tempAudio.duration));
       }
-    };
-    reader.readAsDataURL(file);
+      URL.revokeObjectURL(objUrl);
+    });
+    tempAudio.addEventListener('error', () => {
+      URL.revokeObjectURL(objUrl);
+    });
+
+    setIsUploadingAudio(true);
+    try {
+      const { url } = await uploadAudioFile(file);
+      setAudioUrl(url);
+    } catch (err: any) {
+      setError(err?.message || 'No se pudo subir el archivo de audio al servidor.');
+    } finally {
+      setIsUploadingAudio(false);
+      e.target.value = '';
+    }
   };
 
   const togglePreview = () => {
@@ -150,18 +164,27 @@ export const CreateSongModal: React.FC = () => {
     setIsSubmitting(true);
     audio.playButtonClick();
 
-    await addSong({
-      title: title.trim(),
-      artist: artist.trim(),
-      albumId,
-      coverUrl: coverUrl.trim(),
-      audioUrl: audioUrl.trim(),
-      duration: duration || 180,
-    });
+    try {
+      const res = await addSong({
+        title: title.trim(),
+        artist: artist.trim(),
+        albumId,
+        coverUrl: coverUrl.trim(),
+        audioUrl: audioUrl.trim(),
+        duration: duration || 180,
+      });
 
-    setIsSubmitting(false);
-    setTitle('');
-    setSelectedAlbumForNewSong(null);
+      if (res.success) {
+        setTitle('');
+        setSelectedAlbumForNewSong(null);
+      } else {
+        setError(res.error || 'No se pudo guardar la canción en el álbum.');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Error inesperado al guardar la canción.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const formatDuration = (seconds: number) => {
@@ -258,12 +281,17 @@ export const CreateSongModal: React.FC = () => {
               <label className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-[#122347] hover:bg-[#1a3266] border border-[#223f7a] rounded-xl text-xs text-cyan-200 cursor-pointer transition-colors w-full">
                 <Upload className="w-4 h-4" />
                 <span className="truncate">
-                  {audioFileName ? `Archivo: ${audioFileName}` : 'Cargar archivo MP3 desde dispositivo'}
+                  {isUploadingAudio
+                    ? 'Subiendo audio al servidor...'
+                    : audioFileName
+                    ? `Archivo: ${audioFileName}`
+                    : 'Cargar archivo MP3 desde dispositivo'}
                 </span>
                 <input
                   type="file"
                   accept="audio/mp3,audio/mpeg,audio/wav,audio/ogg,audio/*"
                   onChange={handleAudioFileUpload}
+                  disabled={isUploadingAudio}
                   className="hidden"
                 />
               </label>
@@ -324,12 +352,12 @@ export const CreateSongModal: React.FC = () => {
               <div className="flex-1 space-y-2 w-full">
                 <label className="flex items-center justify-center gap-2 px-3 py-2 bg-[#122347] hover:bg-[#1a3266] border border-[#223f7a] rounded-xl text-xs text-cyan-200 cursor-pointer transition-colors w-full">
                   <Upload className="w-3.5 h-3.5" />
-                  <span>Subir portada de canción</span>
-                  <input type="file" accept="image/*" onChange={handleSongCoverUpload} className="hidden" />
+                  <span>{isUploadingCover ? 'Procesando portada...' : 'Subir portada de canción'}</span>
+                  <input type="file" accept="image/*" onChange={handleSongCoverUpload} disabled={isUploadingCover} className="hidden" />
                 </label>
 
                 <input
-                  type="url"
+                  type="text"
                   placeholder="URL de imagen 512x512"
                   value={coverUrl}
                   onChange={e => setCoverUrl(e.target.value)}
@@ -410,11 +438,19 @@ export const CreateSongModal: React.FC = () => {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || albums.length === 0}
+              disabled={isSubmitting || isUploadingCover || isUploadingAudio || albums.length === 0}
               className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-[#00439c] to-[#0070d1] hover:brightness-110 active:scale-95 text-white shadow-lg shadow-blue-900/50 transition-all cursor-pointer disabled:opacity-50"
             >
               <Check className="w-4 h-4" />
-              <span>{isSubmitting ? 'Guardando Canción...' : 'Guardar Canción en el Álbum'}</span>
+              <span>
+                {isUploadingAudio
+                  ? 'Subiendo Audio...'
+                  : isUploadingCover
+                  ? 'Subiendo Portada...'
+                  : isSubmitting
+                  ? 'Guardando Canción...'
+                  : 'Guardar Canción en el Álbum'}
+              </span>
             </button>
           </div>
         </form>

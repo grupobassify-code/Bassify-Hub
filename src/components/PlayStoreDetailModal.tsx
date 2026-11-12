@@ -52,12 +52,16 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
     showToast,
   } = useApp();
 
-  const [activeImage, setActiveImage] = useState<string>(item.screenshots[0] || item.bannerUrl);
+  const screenshots = item.screenshots || [];
+  const comments = item.comments || [];
+  const likedBy = item.likedBy || [];
+
+  const [activeImage, setActiveImage] = useState<string>(screenshots[0] || item.bannerUrl);
   const [commentText, setCommentText] = useState('');
   const [userRating, setUserRating] = useState(5);
   const [isDownloading, setIsDownloading] = useState(false);
 
-  const isLiked = item.likedBy.includes(currentUser.email);
+  const isLiked = likedBy.includes(currentUser.email);
 
   const handleVisitSite = () => {
     if (!item.downloadUrl || item.downloadUrl === '#') {
@@ -396,14 +400,14 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
           )}
 
           {/* Screenshots Gallery Section (Google Play Store Style) */}
-          {item.screenshots && item.screenshots.length > 0 && (
+          {screenshots.length > 0 && (
             <div className="py-6 border-b border-[#18294a]">
               <h2 className="text-sm font-bold text-white uppercase tracking-wider mb-3">
                 Capturas de Pantalla y Arte Gráfico
               </h2>
 
               <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-thin">
-                {item.screenshots.map((shot, idx) => (
+                {screenshots.map((shot, idx) => (
                   <div
                     key={idx}
                     onClick={() => setActiveImage(shot)}
@@ -482,7 +486,7 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
               </div>
 
               <span className="text-xs font-mono bg-blue-950/60 text-blue-300 border border-blue-900/40 px-2.5 py-1 rounded-lg">
-                {item.comments.length} comentarios
+                {comments.length} comentarios
               </span>
             </div>
 
@@ -553,12 +557,12 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
 
             {/* Comments List */}
             <div className="space-y-3">
-              {item.comments.length === 0 ? (
+              {comments.length === 0 ? (
                 <div className="text-center py-8 text-slate-500 text-xs">
                   Aún no hay comentarios sobre este contenido. ¡Sé el primero en dejar una reseña!
                 </div>
               ) : (
-                item.comments.map(comment => {
+                comments.map(comment => {
                   const isCommentLiked = (comment.likedBy || []).includes(currentUser.email);
                   const canDelete = isAdmin || currentUser.email.toLowerCase() === comment.authorEmail.toLowerCase();
                   return (

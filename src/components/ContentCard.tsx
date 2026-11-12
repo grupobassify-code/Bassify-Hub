@@ -22,7 +22,7 @@ export const ContentCard: React.FC<ContentCardProps> = ({ item }) => {
     currentUser,
   } = useApp();
 
-  const isLiked = item.likedBy.includes(currentUser.email);
+  const isLiked = (item.likedBy || []).includes(currentUser.email);
 
   const handleEdit = (e: React.MouseEvent) => {
     e.stopPropagation();

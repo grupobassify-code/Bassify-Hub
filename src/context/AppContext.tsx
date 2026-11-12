@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   ContentItem,
   SectionType,
@@ -89,8 +89,8 @@ interface AppContextType {
   resetAdminPassword: (recoveryPin: string, newPassword: string, email?: string) => Promise<{ success: boolean; error?: string }>;
   loginAs: (email: string, name?: string) => void;
   logout: () => void;
-  addItem: (item: Omit<ContentItem, 'id' | 'createdAt' | 'comments' | 'likes' | 'likedBy'>) => void;
-  updateItem: (id: string, updated: Partial<ContentItem>) => void;
+  addItem: (item: Omit<ContentItem, 'id' | 'createdAt' | 'comments' | 'likes' | 'likedBy'>) => Promise<{ success: boolean; error?: string }>;
+  updateItem: (id: string, updated: Partial<ContentItem>) => Promise<{ success: boolean; error?: string }>;
   deleteItem: (id: string) => void;
   toggleLikeItem: (id: string) => void;
   toggleFeatured: (id: string) => void;
@@ -127,10 +127,10 @@ interface AppContextType {
   setIsCreateSongModalOpen: (open: boolean) => void;
   selectedAlbumForNewSong: string | null;
   setSelectedAlbumForNewSong: (albumId: string | null) => void;
-  addAlbum: (albumData: Omit<MusicAlbum, 'id' | 'createdAt' | 'songsCount' | 'totalDuration'>) => Promise<void>;
+  addAlbum: (albumData: Omit<MusicAlbum, 'id' | 'createdAt' | 'songsCount' | 'totalDuration'>) => Promise<{ success: boolean; error?: string }>;
   updateAlbum: (id: string, updated: Partial<MusicAlbum>) => Promise<void>;
   deleteAlbum: (id: string) => Promise<void>;
-  addSong: (songData: Omit<MusicSong, 'id' | 'createdAt' | 'likes' | 'likedBy'>) => Promise<void>;
+  addSong: (songData: Omit<MusicSong, 'id' | 'createdAt' | 'likes' | 'likedBy'>) => Promise<{ success: boolean; error?: string }>;
   updateSong: (id: string, updated: Partial<MusicSong>) => Promise<void>;
   deleteSong: (id: string) => Promise<void>;
   toggleLikeSong: (id: string) => void;
@@ -153,6 +153,33 @@ const STORAGE_KEY_AUTH_LOCAL = 'bassify_hub_auth_v6';
 const STORAGE_KEY_ADMIN_VERIFIED = 'bassify_admin_verified_v6';
 const STORAGE_KEY_ALBUMS = 'bassify_hub_albums_v6';
 const STORAGE_KEY_SONGS = 'bassify_hub_songs_v6';
+
+const safeStorageGet = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+const safeStorageSet = (key: string, value: any) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (err) {
+    // Prevent QuotaExceededError from ever crashing React into a white screen
+    console.warn(`LocalStorage quota reached for ${key}:`, err);
+  }
+};
+
+const normalizeClientItem = (item: any): ContentItem => ({
+  ...item,
+  comments: Array.isArray(item?.comments) ? item.comments : [],
+  likedBy: Array.isArray(item?.likedBy) ? item.likedBy : [],
+  screenshots: Array.isArray(item?.screenshots) ? item.screenshots : [],
+  likes: typeof item?.likes === 'number' ? item.likes : 0,
+  rating: typeof item?.rating === 'number' ? item.rating : 5.0,
+  reviewCount: typeof item?.reviewCount === 'number' ? item.reviewCount : (Array.isArray(item?.comments) ? item.comments.length : 0),
+});
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Current user state (defaults to safe Guest mode, never admin by default)
@@ -284,67 +311,218 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isCreateSongModalOpen, setIsCreateSongModalOpen] = useState<boolean>(false);
   const [selectedAlbumForNewSong, setSelectedAlbumForNewSong] = useState<string | null>(null);
 
-  // Sync state to LocalStorage
+  // Sync state to LocalStorage safely (never crashes on quota overflow)
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_CONTENT, JSON.stringify(items));
+    safeStorageSet(STORAGE_KEY_CONTENT, items);
   }, [items]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(currentUser));
+    safeStorageSet(STORAGE_KEY_USER, currentUser);
   }, [currentUser]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_CHAT, JSON.stringify(chatMessages));
+    safeStorageSet(STORAGE_KEY_CHAT, chatMessages);
   }, [chatMessages]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(reports));
+    safeStorageSet(STORAGE_KEY_REPORTS, reports);
   }, [reports]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_MODERATION, JSON.stringify(moderationSettings));
+    safeStorageSet(STORAGE_KEY_MODERATION, moderationSettings);
   }, [moderationSettings]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_ALBUMS, JSON.stringify(albums));
+    safeStorageSet(STORAGE_KEY_ALBUMS, albums);
   }, [albums]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_SONGS, JSON.stringify(songs));
+    safeStorageSet(STORAGE_KEY_SONGS, songs);
   }, [songs]);
 
-  // HYDRATE FROM SERVER DATABASE ON LOAD
+  const selectedItemIdRef = useRef<string | null>(null);
   useEffect(() => {
-    const fetchServerDatabase = async () => {
-      try {
-        const res = await fetch('/api/db');
-        if (res.ok) {
-          const dbData = await res.json();
-          if (Array.isArray(dbData.items) && dbData.items.length > 0) {
-            setItems(dbData.items);
-          }
-          if (Array.isArray(dbData.reports) && dbData.reports.length > 0) {
-            setReports(dbData.reports);
-          }
-          if (Array.isArray(dbData.chatMessages) && dbData.chatMessages.length > 0) {
-            setChatMessages(dbData.chatMessages);
-          }
-          if (Array.isArray(dbData.albums) && dbData.albums.length > 0) {
-            setAlbums(dbData.albums);
-          }
-          if (Array.isArray(dbData.songs) && dbData.songs.length > 0) {
-            setSongs(dbData.songs);
-          }
-          if (dbData.moderationSettings) {
-            setModerationSettings(dbData.moderationSettings);
-          }
+    selectedItemIdRef.current = selectedItem?.id || null;
+  }, [selectedItem]);
+
+  const activeAlbumIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeAlbumIdRef.current = activeAlbumDetail?.id || null;
+  }, [activeAlbumDetail]);
+
+  const syncFromServer = useCallback(async () => {
+    try {
+      const res = await fetch('/api/db', { cache: 'no-store' });
+      if (!res.ok) return;
+      const dbData = await res.json();
+
+      if (Array.isArray(dbData.items)) {
+        const normalized = dbData.items.map(normalizeClientItem);
+        setItems(normalized);
+        if (selectedItemIdRef.current) {
+          const updatedSelected = normalized.find((i: ContentItem) => i.id === selectedItemIdRef.current);
+          setSelectedItem(updatedSelected || null);
         }
-      } catch {
-        // Running in pure client preview or initial build
+      }
+      if (Array.isArray(dbData.reports)) {
+        setReports(dbData.reports);
+      }
+      if (Array.isArray(dbData.chatMessages) && dbData.chatMessages.length > 0) {
+        setChatMessages(dbData.chatMessages);
+      }
+      if (Array.isArray(dbData.albums) && dbData.albums.length > 0) {
+        setAlbums(dbData.albums);
+        if (activeAlbumIdRef.current) {
+          const updatedAlbum = dbData.albums.find((a: MusicAlbum) => a.id === activeAlbumIdRef.current);
+          setActiveAlbumDetail(updatedAlbum || null);
+        }
+      }
+      if (Array.isArray(dbData.songs) && dbData.songs.length > 0) {
+        setSongs(dbData.songs);
+      }
+      if (dbData.moderationSettings) {
+        setModerationSettings(dbData.moderationSettings);
+      }
+    } catch {
+      // Running in pure client preview or offline
+    }
+  }, []);
+
+  // HYDRATE FROM SERVER DATABASE ON LOAD + LIVE SSE SYNC FOR ALL USERS
+  useEffect(() => {
+    syncFromServer();
+
+    let eventSource: EventSource | null = null;
+    let hasDisconnected = false;
+
+    try {
+      eventSource = new EventSource('/api/events');
+
+      eventSource.addEventListener('connected', () => {
+        if (hasDisconnected) {
+          hasDisconnected = false;
+          syncFromServer();
+        }
+      });
+
+      eventSource.addEventListener('db_update', (event: MessageEvent) => {
+        try {
+          const msg = JSON.parse(event.data);
+          const { type, payload } = msg || {};
+
+          if (type === 'item:created' && payload?.id) {
+            const incoming = normalizeClientItem(payload);
+            setItems(prev => {
+              if (prev.some(i => i.id === incoming.id)) {
+                return prev.map(i => (i.id === incoming.id ? incoming : i));
+              }
+              return [incoming, ...prev];
+            });
+          } else if (type === 'item:updated' && payload?.id) {
+            const incoming = normalizeClientItem(payload);
+            setItems(prev => prev.map(i => (i.id === incoming.id ? incoming : i)));
+            if (selectedItemIdRef.current === incoming.id) {
+              setSelectedItem(incoming);
+            }
+          } else if (type === 'item:deleted' && payload?.id) {
+            setItems(prev => prev.filter(i => i.id !== payload.id));
+            if (selectedItemIdRef.current === payload.id) {
+              setSelectedItem(null);
+            }
+          } else if (type === 'album:created' && payload?.id) {
+            setAlbums(prev => {
+              if (prev.some(a => a.id === payload.id)) {
+                return prev.map(a => (a.id === payload.id ? payload : a));
+              }
+              return [payload, ...prev];
+            });
+          } else if (type === 'album:updated' && payload?.id) {
+            setAlbums(prev => prev.map(a => (a.id === payload.id ? payload : a)));
+            if (activeAlbumIdRef.current === payload.id) {
+              setActiveAlbumDetail(payload);
+            }
+          } else if (type === 'album:deleted' && payload?.id) {
+            setAlbums(prev => prev.filter(a => a.id !== payload.id));
+            setSongs(prev => prev.filter(s => s.albumId !== payload.id));
+            if (activeAlbumIdRef.current === payload.id) {
+              setActiveAlbumDetail(null);
+            }
+          } else if (type === 'song:created' && payload?.id) {
+            setSongs(prev => {
+              if (prev.some(s => s.id === payload.id)) return prev;
+              if (payload.albumId) {
+                setAlbums(albPrev =>
+                  albPrev.map(a =>
+                    a.id === payload.albumId
+                      ? {
+                          ...a,
+                          songsCount: (a.songsCount || 0) + 1,
+                          totalDuration: (a.totalDuration || 0) + (payload.duration || 180),
+                        }
+                      : a
+                  )
+                );
+              }
+              return [payload, ...prev];
+            });
+          } else if (type === 'song:updated' && payload?.id) {
+            setSongs(prev => prev.map(s => (s.id === payload.id ? payload : s)));
+          } else if (type === 'song:deleted' && payload?.id) {
+            setSongs(prev => prev.filter(s => s.id !== payload.id));
+            if (payload.albumId) {
+              setAlbums(albPrev =>
+                albPrev.map(a =>
+                  a.id === payload.albumId
+                    ? {
+                        ...a,
+                        songsCount: Math.max(0, (a.songsCount || 1) - 1),
+                        totalDuration: Math.max(0, (a.totalDuration || 180) - (payload.duration || 180)),
+                      }
+                    : a
+                )
+              );
+            }
+          } else if (type === 'chat:created' && payload?.id) {
+            setChatMessages(prev => (prev.some(m => m.id === payload.id) ? prev : [...prev, payload]));
+          } else if (type === 'report:created' && payload?.id) {
+            setReports(prev => (prev.some(r => r.id === payload.id) ? prev : [payload, ...prev]));
+          } else if (type === 'report:updated' && payload?.id) {
+            setReports(prev => prev.map(r => (r.id === payload.id ? payload : r)));
+          } else if (type === 'moderation:updated' && payload) {
+            setModerationSettings(payload);
+          } else if (type === 'db:reset') {
+            setItems([]);
+            setSelectedItem(null);
+          } else if (type === 'db:imported') {
+            syncFromServer();
+          }
+        } catch {
+          // ignore malformed SSE payload
+        }
+      });
+
+      eventSource.onerror = () => {
+        hasDisconnected = true;
+      };
+    } catch {
+      // EventSource unsupported or offline
+    }
+
+    // Re-sync when user returns to tab/window
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncFromServer();
       }
     };
-    fetchServerDatabase();
-  }, []);
+    window.addEventListener('focus', syncFromServer);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      eventSource?.close();
+      window.removeEventListener('focus', syncFromServer);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [syncFromServer]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -734,76 +912,134 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
   // Admin Actions: ADD ITEM
-  const addItem = async (itemData: Omit<ContentItem, 'id' | 'createdAt' | 'comments' | 'likes' | 'likedBy'>) => {
+  const addItem = async (
+    itemData: Omit<ContentItem, 'id' | 'createdAt' | 'comments' | 'likes' | 'likedBy'>
+  ): Promise<{ success: boolean; error?: string }> => {
     if (!isAdmin) {
-      showToast('Acceso denegado: Solo grupobassify@gmail.com puede subir contenidos.');
-      return;
+      const err = 'Acceso denegado: Solo grupobassify@gmail.com puede subir contenidos.';
+      showToast(err);
+      return { success: false, error: err };
     }
 
-    const newItem: ContentItem = {
+    const newItem: ContentItem = normalizeClientItem({
       ...itemData,
-      id: `${itemData.type}-${Date.now()}`,
+      id: `${itemData.type}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       createdAt: new Date().toISOString(),
       comments: [],
       likes: 0,
       likedBy: [],
-    };
+    });
 
-    setItems(prev => [newItem, ...prev]);
-    showToast(`"${newItem.title}" guardado en la base de datos de Bassify Hub.`);
-    setIsUploadModalOpen(false);
+    let savedItem = newItem;
 
-    // Save to server database
+    // Save to server database first so all users receive it reliably
     try {
-      await fetch('/api/items', {
+      const res = await fetch('/api/items', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newItem),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = errData.error || `Error del servidor (${res.status}) al subir el contenido.`;
+        showToast(errMsg);
+        return { success: false, error: errMsg };
+      }
+      const serverItem = await res.json();
+      savedItem = normalizeClientItem(serverItem);
     } catch (e) {
       console.warn('Saved locally, server offline:', e);
     }
 
-    // Auto post an announcement message in Discord
+    setItems(prev => {
+      if (prev.some(i => i.id === savedItem.id)) {
+        return prev.map(i => (i.id === savedItem.id ? savedItem : i));
+      }
+      return [savedItem, ...prev];
+    });
+
+    // Ensure the user immediately sees the newly uploaded item in the active view
+    const targetSectionMap: Record<ItemType, SectionType> = {
+      app: 'apps',
+      game: 'games',
+      news: 'news',
+      event: 'events',
+    };
+    const matchesCurrentSection =
+      (activeSection === 'featured' && !!savedItem.isFeatured) ||
+      (activeSection === 'in_development' && savedItem.status === 'in_development') ||
+      (activeSection === 'updates' && savedItem.status === 'update') ||
+      activeSection === targetSectionMap[savedItem.type];
+
+    if (!matchesCurrentSection) {
+      setActiveSection(targetSectionMap[savedItem.type]);
+    }
+    setSelectedGenre('all');
+    setSearchQuery('');
+
+    showToast(`"${savedItem.title}" publicado y sincronizado para todos los usuarios.`);
+    setIsUploadModalOpen(false);
+
+    // Auto post an announcement message in Discord & persist to server
     const announceMsg: ChatMessage = {
-      id: `m-${Date.now()}`,
+      id: `m-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`,
       channelId: 'anuncios',
       authorEmail: ADMIN_EMAIL,
       authorName: 'Bassify Admin',
       authorAvatar: currentUser.avatar,
       isAdmin: true,
-      content: `🚀 Nuevo contenido en Bassify Hub: [${itemData.title}] (${itemData.genre}). ¡Ya disponible!`,
+      content: `🚀 Nuevo contenido en Bassify Hub: [${savedItem.title}] (${savedItem.genre}). ¡Ya disponible!`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
-    setChatMessages(prev => [...prev, announceMsg]);
+    setChatMessages(prev => (prev.some(m => m.id === announceMsg.id) ? prev : [...prev, announceMsg]));
+    fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(announceMsg),
+    }).catch(() => {});
+
+    return { success: true };
   };
 
-  const updateItem = async (id: string, updated: Partial<ContentItem>) => {
+  const updateItem = async (
+    id: string,
+    updated: Partial<ContentItem>
+  ): Promise<{ success: boolean; error?: string }> => {
     if (!isAdmin) {
-      showToast('Acceso denegado: Solo el administrador puede editar contenido.');
-      return;
-    }
-
-    setItems(prev =>
-      prev.map(item => (item.id === id ? { ...item, ...updated } : item))
-    );
-
-    if (selectedItem && selectedItem.id === id) {
-      setSelectedItem(prev => (prev ? { ...prev, ...updated } : null));
+      const err = 'Acceso denegado: Solo el administrador puede editar contenido.';
+      showToast(err);
+      return { success: false, error: err };
     }
 
     try {
-      await fetch(`/api/items/${id}`, {
+      const res = await fetch(`/api/items/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       });
+      if (res.ok) {
+        const serverItem = normalizeClientItem(await res.json());
+        setItems(prev => prev.map(item => (item.id === id ? serverItem : item)));
+        if (selectedItem && selectedItem.id === id) {
+          setSelectedItem(serverItem);
+        }
+      } else {
+        setItems(prev => prev.map(item => (item.id === id ? { ...item, ...updated } : item)));
+        if (selectedItem && selectedItem.id === id) {
+          setSelectedItem(prev => (prev ? { ...prev, ...updated } : null));
+        }
+      }
     } catch (e) {
       console.warn('Server update offline fallback:', e);
+      setItems(prev => prev.map(item => (item.id === id ? { ...item, ...updated } : item)));
+      if (selectedItem && selectedItem.id === id) {
+        setSelectedItem(prev => (prev ? { ...prev, ...updated } : null));
+      }
     }
 
-    showToast('Contenido guardado y actualizado en la base de datos.');
+    showToast('Contenido guardado y actualizado para todos.');
     setEditingItem(null);
+    return { success: true };
   };
 
   // Dedicated Quick Game Link Update (Admin)
@@ -874,14 +1110,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Contenido eliminado de la base de datos.');
   };
 
-  const toggleLikeItem = (id: string) => {
+  const toggleLikeItem = async (id: string) => {
     setItems(prev =>
       prev.map(item => {
         if (item.id !== id) return item;
-        const hasLiked = item.likedBy.includes(currentUser.email);
+        const likedBy = item.likedBy || [];
+        const hasLiked = likedBy.includes(currentUser.email);
         const newLikedBy = hasLiked
-          ? item.likedBy.filter(e => e !== currentUser.email)
-          : [...item.likedBy, currentUser.email];
+          ? likedBy.filter(e => e !== currentUser.email)
+          : [...likedBy, currentUser.email];
         return {
           ...item,
           likes: hasLiked ? Math.max(0, item.likes - 1) : item.likes + 1,
@@ -891,18 +1128,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     if (selectedItem && selectedItem.id === id) {
-      const hasLiked = selectedItem.likedBy.includes(currentUser.email);
+      const likedBy = selectedItem.likedBy || [];
+      const hasLiked = likedBy.includes(currentUser.email);
       setSelectedItem(prev =>
         prev
           ? {
               ...prev,
               likes: hasLiked ? Math.max(0, prev.likes - 1) : prev.likes + 1,
               likedBy: hasLiked
-                ? prev.likedBy.filter(e => e !== currentUser.email)
-                : [...prev.likedBy, currentUser.email],
+                ? likedBy.filter(e => e !== currentUser.email)
+                : [...likedBy, currentUser.email],
             }
           : null
       );
+    }
+
+    try {
+      await fetch(`/api/items/${id}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail: currentUser.email }),
+      });
+    } catch {
+      // offline
     }
   };
 
@@ -1017,11 +1265,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Comentario eliminado de la base de datos.');
   };
 
-  const likeComment = (itemId: string, commentId: string) => {
+  const likeComment = async (itemId: string, commentId: string) => {
     setItems(prev =>
       prev.map(item => {
         if (item.id !== itemId) return item;
-        const updatedComments = item.comments.map(c => {
+        const updatedComments = (item.comments || []).map(c => {
           if (c.id !== commentId) return c;
           const likedBy = c.likedBy || [];
           const hasLiked = likedBy.includes(currentUser.email);
@@ -1040,7 +1288,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (selectedItem && selectedItem.id === itemId) {
       setSelectedItem(prev => {
         if (!prev) return null;
-        const updatedComments = prev.comments.map(c => {
+        const updatedComments = (prev.comments || []).map(c => {
           if (c.id !== commentId) return c;
           const likedBy = c.likedBy || [];
           const hasLiked = likedBy.includes(currentUser.email);
@@ -1054,6 +1302,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
         return { ...prev, comments: updatedComments };
       });
+    }
+
+    try {
+      await fetch(`/api/items/${itemId}/comments/${commentId}/like`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userEmail: currentUser.email }),
+      });
+    } catch {
+      // offline
     }
   };
 
@@ -1147,19 +1405,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // UPDATE MODERATION SETTINGS
-  const updateModerationSettings = (newSettings: Partial<ModerationSettings>) => {
-    setModerationSettings(prev => ({ ...prev, ...newSettings }));
+  const updateModerationSettings = async (newSettings: Partial<ModerationSettings>) => {
+    const merged = { ...moderationSettings, ...newSettings };
+    setModerationSettings(merged);
     showToast('Ajustes de moderación y filtro actualizados.');
+    try {
+      await fetch('/api/moderation', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(merged),
+      });
+    } catch {
+      // offline
+    }
   };
 
   // ==========================================
   // MUSIC & ALBUM ACTIONS (SPOTIFY STYLE)
   // ==========================================
 
-  const addAlbum = async (albumData: Omit<MusicAlbum, 'id' | 'createdAt' | 'songsCount' | 'totalDuration'>) => {
+  const addAlbum = async (
+    albumData: Omit<MusicAlbum, 'id' | 'createdAt' | 'songsCount' | 'totalDuration'>
+  ): Promise<{ success: boolean; error?: string }> => {
     if (!isAdmin) {
-      showToast('Acceso denegado: Solo el administrador puede crear álbumes.');
-      return;
+      const err = 'Acceso denegado: Solo el administrador puede crear álbumes.';
+      showToast(err);
+      return { success: false, error: err };
     }
     const newAlbum: MusicAlbum = {
       ...albumData,
@@ -1169,18 +1440,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
       authorEmail: currentUser.email,
     };
-    setAlbums(prev => [newAlbum, ...prev]);
-    setIsCreateAlbumModalOpen(false);
-    showToast(`Álbum "${newAlbum.title}" creado con éxito.`);
+
+    let savedAlbum = newAlbum;
     try {
-      await fetch('/api/albums', {
+      const res = await fetch('/api/albums', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newAlbum),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = errData.error || 'No se pudo guardar el álbum en el servidor.';
+        showToast(errMsg);
+        return { success: false, error: errMsg };
+      }
+      savedAlbum = await res.json();
     } catch (e) {
       console.warn('Saved album locally, server offline:', e);
     }
+
+    setAlbums(prev => (prev.some(a => a.id === savedAlbum.id) ? prev : [savedAlbum, ...prev]));
+    setIsCreateAlbumModalOpen(false);
+    showToast(`Álbum "${savedAlbum.title}" creado y visible para todos.`);
+    return { success: true };
   };
 
   const updateAlbum = async (id: string, updated: Partial<MusicAlbum>) => {
@@ -1218,10 +1500,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   };
 
-  const addSong = async (songData: Omit<MusicSong, 'id' | 'createdAt' | 'likes' | 'likedBy'>) => {
+  const addSong = async (
+    songData: Omit<MusicSong, 'id' | 'createdAt' | 'likes' | 'likedBy'>
+  ): Promise<{ success: boolean; error?: string }> => {
     if (!isAdmin) {
-      showToast('Acceso denegado: Solo el administrador puede subir canciones.');
-      return;
+      const err = 'Acceso denegado: Solo el administrador puede subir canciones.';
+      showToast(err);
+      return { success: false, error: err };
     }
     const targetAlbum = albums.find(a => a.id === songData.albumId);
     const duration = songData.duration || 182;
@@ -1240,39 +1525,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       likedBy: [],
     };
 
-    setSongs(prev => [newSong, ...prev]);
-
-    // Update album count and duration
-    if (newSong.albumId) {
-      setAlbums(prev => prev.map(a => {
-        if (a.id !== newSong.albumId) return a;
-        return {
-          ...a,
-          songsCount: (a.songsCount || 0) + 1,
-          totalDuration: (a.totalDuration || 0) + duration,
-        };
-      }));
-      if (activeAlbumDetail && activeAlbumDetail.id === newSong.albumId) {
-        setActiveAlbumDetail(prev => prev ? {
-          ...prev,
-          songsCount: (prev.songsCount || 0) + 1,
-          totalDuration: (prev.totalDuration || 0) + duration,
-        } : null);
-      }
-    }
-
-    setIsCreateSongModalOpen(false);
-    showToast(`Canción "${newSong.title}" añadida con éxito.`);
-
+    let savedSong = newSong;
     try {
-      await fetch('/api/songs', {
+      const res = await fetch('/api/songs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSong),
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const errMsg = errData.error || 'No se pudo subir la canción al servidor.';
+        showToast(errMsg);
+        return { success: false, error: errMsg };
+      }
+      savedSong = await res.json();
     } catch (e) {
       console.warn('Saved song locally, server offline:', e);
     }
+
+    setSongs(prev => {
+      if (prev.some(s => s.id === savedSong.id)) return prev;
+      if (savedSong.albumId) {
+        setAlbums(albPrev => albPrev.map(a => {
+          if (a.id !== savedSong.albumId) return a;
+          return {
+            ...a,
+            songsCount: (a.songsCount || 0) + 1,
+            totalDuration: (a.totalDuration || 0) + duration,
+          };
+        }));
+        if (activeAlbumDetail && activeAlbumDetail.id === savedSong.albumId) {
+          setActiveAlbumDetail(albPrev => albPrev ? {
+            ...albPrev,
+            songsCount: (albPrev.songsCount || 0) + 1,
+            totalDuration: (albPrev.totalDuration || 0) + duration,
+          } : null);
+        }
+      }
+      return [savedSong, ...prev];
+    });
+
+    setIsCreateSongModalOpen(false);
+    showToast(`Canción "${savedSong.title}" añadida y visible para todos.`);
+    return { success: true };
   };
 
   const updateSong = async (id: string, updated: Partial<MusicSong>) => {
