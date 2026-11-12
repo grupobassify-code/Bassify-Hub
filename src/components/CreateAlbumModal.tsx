@@ -3,6 +3,7 @@ import { X, Disc, Image as ImageIcon, Music, Upload, Sparkles, Check, AlertCircl
 import { useApp } from '../context/AppContext';
 import { audio } from '../utils/audioSystem';
 import { processAndUploadImage } from '../utils/mediaUpload';
+import { SafeImage } from './SafeImage';
 
 const PRESET_COVERS = [
   { label: 'Soundwave Studio', url: '/assets/images/ps_app_soundwave_studio_1792032421478.jpg' },
@@ -226,9 +227,11 @@ export const CreateAlbumModal: React.FC = () => {
             <div className="flex flex-col sm:flex-row gap-3.5 items-center">
               {/* Square 512x512 Preview */}
               <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-xl overflow-hidden border-2 border-cyan-400/50 bg-[#070e1c] shadow-lg shrink-0 group">
-                <img
+                <SafeImage
                   src={coverUrl}
                   alt="Portada del Álbum"
+                  fallbackTitle={title || 'Álbum'}
+                  itemType="album"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-black/70 backdrop-blur-xs py-1 text-center text-[9px] font-mono text-cyan-300">

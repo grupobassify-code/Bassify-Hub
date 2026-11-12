@@ -18,6 +18,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { ADMIN_EMAIL } from '../data/initialData';
 import { DEFAULT_FIGURE_AVATARS } from '../utils/avatars';
+import { SafeImage } from './SafeImage';
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, setIsAuthModalOpen, currentUser, login, register, resetAdminPassword, logout } = useApp();
@@ -422,11 +423,12 @@ export const AuthModal: React.FC = () => {
                     }`}
                     title={avatar.name}
                   >
-                    <img
+                    <SafeImage
                       src={avatar.url}
                       alt={avatar.name}
+                      fallbackTitle={avatar.name}
+                      itemType="avatar"
                       className="w-full h-full object-cover rounded-lg"
-                      referrerPolicy="no-referrer"
                     />
                     {regAvatar === avatar.url && (
                       <div className="absolute inset-0 bg-blue-600/25 flex items-center justify-center">

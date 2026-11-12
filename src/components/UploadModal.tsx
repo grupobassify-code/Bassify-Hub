@@ -16,6 +16,7 @@ import {
   Sparkles,
   FolderOpen,
   Images,
+  Loader2,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ItemType, ItemStatus } from '../types';
@@ -61,7 +62,10 @@ export const UploadModal: React.FC = () => {
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [isUploadingScreenshots, setIsUploadingScreenshots] = useState(false);
+  const [pendingScreenshotsCount, setPendingScreenshotsCount] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingMessage, setProcessingMessage] = useState<string>('');
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const logoFileRef = useRef<HTMLInputElement>(null);
@@ -149,14 +153,20 @@ export const UploadModal: React.FC = () => {
     }
 
     setIsUploadingLogo(true);
+    setProcessingMessage('Optimizando y subiendo logo (512×512)...');
+    setUploadProgress(25);
     try {
+      setUploadProgress(55);
       const { url } = await processAndUploadImage(file, { maxDimension: 512, squareCrop: true });
+      setUploadProgress(100);
       setLogoUrl(url);
       showToast('¡Logo optimizado y cargado exitosamente!');
     } catch {
       showToast('No se pudo procesar la imagen del logo.');
     } finally {
       setIsUploadingLogo(false);
+      setProcessingMessage('');
+      setUploadProgress(0);
     }
   };
 
@@ -177,14 +187,20 @@ export const UploadModal: React.FC = () => {
     }
 
     setIsUploadingBanner(true);
+    setProcessingMessage('Optimizando y subiendo banner horizontal (16:9)...');
+    setUploadProgress(25);
     try {
+      setUploadProgress(55);
       const { url } = await processAndUploadImage(file, { maxDimension: 1280, squareCrop: false });
+      setUploadProgress(100);
       setBannerUrl(url);
       showToast('¡Banner horizontal optimizado y cargado exitosamente!');
     } catch {
       showToast('No se pudo procesar la imagen del banner.');
     } finally {
       setIsUploadingBanner(false);
+      setProcessingMessage('');
+      setUploadProgress(0);
     }
   };
 
@@ -203,15 +219,21 @@ export const UploadModal: React.FC = () => {
     }
 
     setIsUploadingScreenshots(true);
+    setPendingScreenshotsCount(validFiles.length);
+    setUploadProgress(10);
     const newImgs: string[] = [];
     try {
-      for (const file of validFiles) {
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i];
+        setProcessingMessage(`Procesando captura ${i + 1} de ${validFiles.length}...`);
         try {
           const { url } = await processAndUploadImage(file, { maxDimension: 1280, squareCrop: false });
           newImgs.push(url);
         } catch {
           // skip corrupted single image
         }
+        setPendingScreenshotsCount(Math.max(0, validFiles.length - (i + 1)));
+        setUploadProgress(Math.round(((i + 1) / validFiles.length) * 100));
       }
       if (newImgs.length > 0) {
         setScreenshots(prev => [...prev, ...newImgs]);
@@ -221,6 +243,9 @@ export const UploadModal: React.FC = () => {
       }
     } finally {
       setIsUploadingScreenshots(false);
+      setPendingScreenshotsCount(0);
+      setProcessingMessage('');
+      setUploadProgress(0);
     }
   };
 
@@ -297,12 +322,20 @@ export const UploadModal: React.FC = () => {
     };
 
     setIsSubmitting(true);
+    setUploadProgress(20);
+    setProcessingMessage(editingItem ? 'Guardando cambios en el servidor...' : 'Publicando contenido y sincronizando con todos...');
+    const progressTimer = window.setInterval(() => {
+      setUploadProgress(prev => (prev < 90 ? Math.min(90, prev + 12) : prev));
+    }, 280);
+
     try {
       const result = editingItem
         ? await updateItem(editingItem.id, itemData)
         : await addItem(itemData);
 
       if (result.success) {
+        setUploadProgress(100);
+        setProcessingMessage('¡Publicado y sincronizado!');
         handleClose();
       } else {
         setSubmitError(result.error || 'No se pudo publicar el contenido.');
@@ -310,9 +343,14 @@ export const UploadModal: React.FC = () => {
     } catch {
       setSubmitError('Ocurrió un error al publicar el contenido. Inténtalo de nuevo.');
     } finally {
+      window.clearInterval(progressTimer);
       setIsSubmitting(false);
+      setProcessingMessage('');
+      setUploadProgress(0);
     }
   };
+
+  const isProcessing = isSubmitting || isUploadingLogo || isUploadingBanner || isUploadingScreenshots;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/85 backdrop-blur-md overflow-y-auto">
@@ -374,6 +412,82 @@ export const UploadModal: React.FC = () => {
           </div>
         ) : (
           /* Form for Authorized Admin (grupobassify@gmail.com) */
+          <div className="relative flex-1 min-h-0 flex flex-col">
+            {/* Top Live Visual Progress Bar during media processing or network request */}
+            {isProcessing && (
+              <div className="px-4 sm:px-6 py-2.5 bg-[#081327] border-b border-cyan-500/30 shrink-0 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="flex items-center gap-2 font-semibold text-cyan-300">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+                    <span>{processingMessage || 'Procesando solicitud...'}</span>
+                  </span>
+                  <span className="font-mono font-bold text-cyan-200">{uploadProgress}%</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-[#0d1f40] overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-400 transition-all duration-300 rounded-full"
+                    style={{ width: `${Math.max(8, uploadProgress)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Skeleton Loader Overlay while publishing/updating on the server */}
+            {isSubmitting && (
+              <div
+                aria-live="polite"
+                aria-busy="true"
+                className="absolute inset-0 z-30 bg-[#071022]/90 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+              >
+                <div className="w-full max-w-md bg-[#0b1730] border border-cyan-500/40 rounded-2xl p-5 shadow-2xl space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-400/40 flex items-center justify-center text-cyan-400 shrink-0">
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-white truncate">
+                        {editingItem ? 'Actualizando publicación...' : 'Subiendo a Bassify Hub...'}
+                      </p>
+                      <p className="text-[11px] text-cyan-300/90 truncate">
+                        {processingMessage || 'Sincronizando contenido con todos los usuarios'}
+                      </p>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-cyan-300 shrink-0">
+                      {uploadProgress}%
+                    </span>
+                  </div>
+
+                  {/* Progress track */}
+                  <div className="w-full h-2 rounded-full bg-[#070f20] border border-[#1a2f58] overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#0055cb] via-cyan-400 to-emerald-400 transition-all duration-300"
+                      style={{ width: `${Math.max(12, uploadProgress)}%` }}
+                    />
+                  </div>
+
+                  {/* Skeleton Card Preview */}
+                  <div className="rounded-xl border border-[#192d55] bg-[#081226] overflow-hidden p-3 space-y-3 animate-pulse">
+                    <div className="w-full h-24 rounded-lg bg-[#112244]" />
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-xl bg-[#162b54] shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 w-3/4 rounded bg-[#162b54]" />
+                        <div className="h-2.5 w-1/2 rounded bg-[#112244]" />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="h-2 w-full rounded bg-[#112244]" />
+                      <div className="h-2 w-5/6 rounded bg-[#112244]" />
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-center text-slate-400">
+                    Por favor no cierres esta ventana mientras finaliza la sincronización.
+                  </p>
+                </div>
+              </div>
+            )}
+
           <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-5 max-h-[80vh] overflow-y-auto scrollbar-thin">
             {/* Admin Badge Confirmation */}
             <div className="flex items-center justify-between p-3 rounded-xl bg-blue-950/40 border border-blue-900/50 text-xs">
@@ -550,23 +664,32 @@ export const UploadModal: React.FC = () => {
               </div>
 
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
-                {/* Logo Preview with click to upload */}
+                {/* Logo Preview with click to upload + Skeleton Loader */}
                 <div
-                  onClick={() => logoFileRef.current?.click()}
+                  onClick={() => !isUploadingLogo && logoFileRef.current?.click()}
                   className="relative w-28 h-28 rounded-2xl overflow-hidden border-2 border-dashed border-blue-500/60 hover:border-blue-400 bg-[#060c18] shrink-0 flex items-center justify-center shadow-inner cursor-pointer group"
                   title="Toca para elegir foto o archivo de tu dispositivo"
                 >
-                  <SafeImage
-                    src={logoUrl}
-                    fallbackTitle={title || 'Logo'}
-                    itemType={type}
-                    alt="Logo Preview"
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                  />
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-semibold gap-1 p-1 text-center">
-                    <Camera className="w-5 h-5 text-blue-300" />
-                    <span>Cambiar Imagen</span>
-                  </div>
+                  {isUploadingLogo ? (
+                    <div className="w-full h-full bg-[#0b1833] animate-pulse flex flex-col items-center justify-center gap-1.5 p-2 text-center">
+                      <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
+                      <span className="text-[10px] font-mono text-cyan-300">Cargando...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <SafeImage
+                        src={logoUrl}
+                        fallbackTitle={title || 'Logo'}
+                        itemType={type}
+                        alt="Logo Preview"
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[10px] font-semibold gap-1 p-1 text-center">
+                        <Camera className="w-5 h-5 text-blue-300" />
+                        <span>Cambiar Imagen</span>
+                      </div>
+                    </>
+                  )}
                   <span className="absolute bottom-1 right-1 text-[8px] bg-black/80 text-white font-mono px-1 rounded">
                     512×512
                   </span>
@@ -659,9 +782,30 @@ export const UploadModal: React.FC = () => {
                   onClick={() => bannerFileRef.current?.click()}
                   className="w-full py-2 px-3 bg-[#081022] hover:bg-[#0d1b38] disabled:opacity-60 border border-[#1b2e56] hover:border-blue-500/50 rounded-xl text-xs text-blue-200 flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
-                  <FolderOpen className="w-3.5 h-3.5 text-blue-400" />
+                  {isUploadingBanner ? (
+                    <Loader2 className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+                  ) : (
+                    <FolderOpen className="w-3.5 h-3.5 text-blue-400" />
+                  )}
                   <span>{isUploadingBanner ? 'Optimizando Banner...' : 'Subir Banner desde el dispositivo'}</span>
                 </button>
+                {/* Banner 16:9 Live Preview / Skeleton Loader */}
+                <div className="relative aspect-[16/9] w-full rounded-xl overflow-hidden border border-[#192f59] bg-[#060c18]">
+                  {isUploadingBanner ? (
+                    <div className="w-full h-full bg-[#0d1c38] animate-pulse flex flex-col items-center justify-center gap-1.5">
+                      <Loader2 className="w-5 h-5 text-cyan-400 animate-spin" />
+                      <span className="text-[10px] font-mono text-cyan-300">Procesando banner 16:9...</span>
+                    </div>
+                  ) : (
+                    <SafeImage
+                      src={bannerUrl}
+                      fallbackTitle={title || 'Banner'}
+                      itemType={type}
+                      alt="Banner Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  )}
+                </div>
                 <input
                   type="text"
                   value={bannerUrl}
@@ -855,14 +999,15 @@ export const UploadModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Screenshots Gallery Preview */}
-              {screenshots.length > 0 && (
+              {/* Screenshots Gallery Preview + Skeleton Tiles during Upload */}
+              {(screenshots.length > 0 || isUploadingScreenshots) && (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
                   {screenshots.map((url, i) => (
                     <div key={i} className="relative aspect-video rounded-xl overflow-hidden group border border-[#1b3464] bg-black/60 shadow-md">
                       <SafeImage
                         src={url}
                         alt={`Captura ${i + 1}`}
+                        fallbackTitle={`${title || 'Captura'} ${i + 1}`}
                         itemType={type}
                         className="w-full h-full object-cover"
                       />
@@ -879,6 +1024,16 @@ export const UploadModal: React.FC = () => {
                       </button>
                     </div>
                   ))}
+                  {isUploadingScreenshots &&
+                    Array.from({ length: Math.max(1, pendingScreenshotsCount) }).map((_, idx) => (
+                      <div
+                        key={`skeleton-${idx}`}
+                        className="relative aspect-video rounded-xl overflow-hidden border border-cyan-500/40 bg-[#0d1c38] animate-pulse flex flex-col items-center justify-center gap-1"
+                      >
+                        <Loader2 className="w-4 h-4 text-cyan-400 animate-spin" />
+                        <span className="text-[10px] font-mono text-cyan-300">Subiendo...</span>
+                      </div>
+                    ))}
                 </div>
               )}
             </div>
@@ -902,12 +1057,14 @@ export const UploadModal: React.FC = () => {
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting || isUploadingLogo || isUploadingBanner || isUploadingScreenshots}
+                disabled={isProcessing}
                 className="px-6 py-2.5 rounded-xl text-xs font-bold bg-[#00439c] hover:bg-blue-600 disabled:opacity-60 text-white transition-all shadow-lg shadow-blue-900/40 flex items-center gap-2 cursor-pointer"
               >
-                <Upload className="w-4 h-4" />
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                 <span>
-                  {isSubmitting
+                  {isUploadingLogo || isUploadingBanner || isUploadingScreenshots
+                    ? 'Procesando imágenes...'
+                    : isSubmitting
                     ? 'Publicando...'
                     : editingItem
                     ? 'Guardar Cambios'
@@ -916,6 +1073,7 @@ export const UploadModal: React.FC = () => {
               </button>
             </div>
           </form>
+          </div>
         )}
       </div>
     </div>

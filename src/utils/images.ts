@@ -63,12 +63,20 @@ export const CONTENT_IMAGE_PRESETS = [
   },
 ];
 
+const escapeXml = (str: string): string =>
+  str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 /**
  * Generates an elegant SVG placeholder in Bassify Blue theme so no broken image icons ever show
  */
 export const createSvgPlaceholder = (title: string = 'Bassify Hub', type: string = 'game'): string => {
-  const safeTitle = (title || 'Bassify Hub').substring(0, 24);
-  const typeLabel = (type || 'CONTENIDO').toUpperCase();
+  const safeTitle = escapeXml((title || 'Bassify Hub').trim().substring(0, 24) || 'Bassify Hub');
+  const typeLabel = escapeXml((type || 'CONTENIDO').trim().toUpperCase().substring(0, 16) || 'CONTENIDO');
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
     <defs>
@@ -109,18 +117,51 @@ export const createSvgPlaceholder = (title: string = 'Bassify Hub', type: string
 };
 
 /**
+ * Generates an inline SVG avatar placeholder with user initial so avatars never appear broken
+ */
+export const createAvatarFallback = (name: string = 'B'): string => {
+  const initial = escapeXml((name || 'B').trim().charAt(0).toUpperCase() || 'B');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+    <defs>
+      <linearGradient id="av-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#003791" />
+        <stop offset="100%" stop-color="#0284c7" />
+      </linearGradient>
+    </defs>
+    <rect width="100" height="100" rx="24" fill="url(#av-grad)" />
+    <circle cx="50" cy="50" r="38" fill="none" stroke="#38bdf8" stroke-opacity="0.35" stroke-width="2" />
+    <text x="50" y="61" text-anchor="middle" font-family="system-ui, sans-serif" font-size="42" font-weight="800" fill="#ffffff">${initial}</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+};
+
+export const getFallbackImage = (title: string = 'Bassify Hub', type: string = 'game'): string => {
+  if (type === 'avatar') {
+    return createAvatarFallback(title);
+  }
+  return createSvgPlaceholder(title, type);
+};
+
+/**
  * Resolves any image URL safely:
- * - If it was stored as "/src/assets/images/...", maps to the bundled asset or public path
- * - Returns clean URL
+ * - Maps legacy /src/assets or /public/images paths to Vite-bundled assets
+ * - Normalizes missing protocols or leading /public prefixes
+ * - Falls back cleanly to a guaranteed inline SVG placeholder when empty
  */
 export const getSafeImageUrl = (url?: string, type: string = 'game', title: string = 'Bassify'): string => {
   if (!url || typeof url !== 'string' || !url.trim()) {
-    return createSvgPlaceholder(title, type);
+    return getFallbackImage(title, type);
   }
 
-  const trimmed = url.trim();
+  let trimmed = url.trim();
 
-  // If it points to old /src/assets/images/...
+  if (trimmed.startsWith('/public/')) {
+    trimmed = trimmed.slice('/public'.length);
+  } else if (trimmed.startsWith('public/')) {
+    trimmed = '/' + trimmed.slice('public/'.length);
+  }
+
+  // Always resolve known local/bundled assets directly via Vite bundle imports
   if (trimmed.includes('ps_app_soundwave_studio')) {
     return soundwaveImg;
   }
@@ -132,6 +173,23 @@ export const getSafeImageUrl = (url?: string, type: string = 'game', title: stri
   }
   if (trimmed.includes('ps_news_playstation_event')) {
     return psEventImg;
+  }
+
+  // Handle protocol-relative or missing-protocol web URLs cleanly
+  if (trimmed.startsWith('//')) {
+    return `https:${trimmed}`;
+  }
+  if (
+    !trimmed.startsWith('/') &&
+    !trimmed.startsWith('http://') &&
+    !trimmed.startsWith('https://') &&
+    !trimmed.startsWith('data:') &&
+    !trimmed.startsWith('blob:')
+  ) {
+    if (trimmed.includes('.') && !trimmed.includes(' ')) {
+      return `https://${trimmed}`;
+    }
+    return `/${trimmed}`;
   }
 
   return trimmed;

@@ -26,6 +26,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { ContentItem, ItemType, ReportItem } from '../types';
 import { DEFAULT_PROFANITY_LIST } from '../utils/moderation';
+import { SafeImage } from './SafeImage';
 
 export const AdminTableModal: React.FC = () => {
   const {
@@ -324,11 +325,12 @@ export const AdminTableModal: React.FC = () => {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <div className="w-10 h-10 rounded-xl overflow-hidden border border-[#20345d] bg-[#060c18] shrink-0 shadow-sm">
-                              <img
+                              <SafeImage
                                 src={item.logoUrl}
                                 alt={item.title}
+                                fallbackTitle={item.title}
+                                itemType={item.type}
                                 className="w-full h-full object-cover"
-                                referrerPolicy="no-referrer"
                               />
                             </div>
                             <span className="text-[9px] font-mono text-slate-500 hidden xl:inline">

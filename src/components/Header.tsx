@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { SectionType } from '../types';
 import { MusicPlayerWidget } from './MusicPlayerWidget';
 import { audio } from '../utils/audioSystem';
+import { SafeImage } from './SafeImage';
 
 export const Header: React.FC = () => {
   const {
@@ -239,11 +240,12 @@ export const Header: React.FC = () => {
           title="Ver perfil o cambiar foto"
         >
           <div className="relative shrink-0">
-            <img
+            <SafeImage
               src={currentUser.avatar}
               alt={currentUser.name}
+              fallbackTitle={currentUser.name}
+              itemType="avatar"
               className="w-7 h-7 sm:w-6 sm:h-6 rounded-lg object-cover border border-blue-400/50 bg-[#070e1c]"
-              referrerPolicy="no-referrer"
             />
             <span
               className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-[#091326] ${

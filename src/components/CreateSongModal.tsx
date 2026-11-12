@@ -3,6 +3,7 @@ import { X, Music, Upload, Image as ImageIcon, Disc, Check, AlertCircle, Play, P
 import { useApp } from '../context/AppContext';
 import { audio } from '../utils/audioSystem';
 import { processAndUploadImage, uploadAudioFile } from '../utils/mediaUpload';
+import { SafeImage } from './SafeImage';
 
 const PRESET_SONG_COVERS = [
   { label: 'Sci-Fi Odyssey', url: '/assets/images/ps_game_scifi_odyssey_1792032420390.jpg' },
@@ -339,9 +340,11 @@ export const CreateSongModal: React.FC = () => {
 
             <div className="flex flex-col sm:flex-row gap-3.5 items-center">
               <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden border-2 border-cyan-400/50 bg-[#070e1c] shadow-md shrink-0">
-                <img
+                <SafeImage
                   src={coverUrl}
                   alt="Carátula de la Canción"
+                  fallbackTitle={title || 'Canción'}
+                  itemType="song"
                   className="w-full h-full object-cover"
                 />
                 <div className="absolute inset-x-0 bottom-0 bg-black/75 py-0.5 text-center text-[8px] font-mono text-cyan-300">

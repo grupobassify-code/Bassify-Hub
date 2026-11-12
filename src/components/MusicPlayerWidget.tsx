@@ -19,6 +19,7 @@ import {
   SkipForward,
 } from 'lucide-react';
 import { audio, AudioSystemState, OFFICIAL_BACKGROUND_TRACK } from '../utils/audioSystem';
+import { SafeImage } from './SafeImage';
 
 export const MusicPlayerWidget: React.FC = () => {
   const [audioState, setAudioState] = useState<AudioSystemState>(audio.getState());
@@ -232,9 +233,11 @@ export const MusicPlayerWidget: React.FC = () => {
             <div className="flex gap-3 items-start mb-2">
               {audioState.coverUrl && (
                 <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-cyan-500/40 shrink-0 bg-[#070e1c]">
-                  <img
+                  <SafeImage
                     src={audioState.coverUrl}
                     alt={audioState.currentTrackTitle}
+                    fallbackTitle={audioState.currentTrackTitle}
+                    itemType="song"
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute inset-x-0 bottom-0 bg-black/70 text-[7px] font-mono text-cyan-300 text-center py-0.2">

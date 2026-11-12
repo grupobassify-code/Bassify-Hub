@@ -494,11 +494,12 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
             <form onSubmit={handlePostComment} className="bg-[#0e1932] border border-[#1b2e56] rounded-2xl p-4 mb-6">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <img
+                  <SafeImage
                     src={currentUser.avatar}
                     alt={currentUser.name}
+                    fallbackTitle={currentUser.name}
+                    itemType="avatar"
                     className="w-7 h-7 rounded-full object-cover border border-blue-500/40"
-                    referrerPolicy="no-referrer"
                   />
                   <span className="text-xs font-semibold text-white">{currentUser.name}</span>
                   {isAdmin && (
@@ -572,11 +573,12 @@ export const PlayStoreDetailModal: React.FC<PlayStoreDetailModalProps> = ({ item
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <img
+                          <SafeImage
                             src={comment.authorAvatar}
                             alt={comment.authorName}
+                            fallbackTitle={comment.authorName}
+                            itemType="avatar"
                             className="w-7 h-7 rounded-full object-cover"
-                            referrerPolicy="no-referrer"
                           />
                           <div>
                             <div className="flex items-center gap-1.5">

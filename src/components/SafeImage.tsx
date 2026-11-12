@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { getSafeImageUrl, createSvgPlaceholder } from '../utils/images';
+import React, { useState, useEffect, useRef } from 'react';
+import { getSafeImageUrl, getFallbackImage } from '../utils/images';
 
 interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   fallbackTitle?: string;
@@ -12,30 +12,64 @@ export const SafeImage: React.FC<SafeImageProps> = ({
   fallbackTitle = 'Bassify Hub',
   itemType = 'game',
   className = '',
+  onLoad,
+  onError,
   ...props
 }) => {
-  const [hasError, setHasError] = useState(false);
   const safeSrc = getSafeImageUrl(src, itemType, fallbackTitle);
+  const isInlineData = safeSrc.startsWith('data:') || safeSrc.startsWith('blob:');
+
+  // stage: 0 = direct safeSrc, 1 = server /api/image-proxy (for external http/https), 2 = inline SVG fallback
+  const [stage, setStage] = useState<0 | 1 | 2>(0);
+  const [isLoaded, setIsLoaded] = useState<boolean>(isInlineData);
+  const imgRef = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
-    setHasError(false);
-  }, [src]);
+    setStage(0);
+    setIsLoaded(safeSrc.startsWith('data:') || safeSrc.startsWith('blob:'));
+  }, [safeSrc]);
 
-  const handleError = () => {
-    if (!hasError) {
-      setHasError(true);
+  const activeSrc =
+    stage === 0
+      ? safeSrc
+      : stage === 1 && (safeSrc.startsWith('http://') || safeSrc.startsWith('https://'))
+      ? `/api/image-proxy?url=${encodeURIComponent(safeSrc)}`
+      : getFallbackImage(fallbackTitle || alt || 'Bassify Hub', itemType);
+
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img && img.complete) {
+      if (img.naturalWidth > 0) {
+        setIsLoaded(true);
+      }
     }
+  }, [activeSrc]);
+
+  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    setIsLoaded(true);
+    onLoad?.(e);
   };
 
-  const finalSrc = hasError ? createSvgPlaceholder(fallbackTitle, itemType) : safeSrc;
+  const handleError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    if (stage === 0 && (safeSrc.startsWith('http://') || safeSrc.startsWith('https://'))) {
+      setStage(1);
+    } else if (stage < 2) {
+      setStage(2);
+      setIsLoaded(true);
+    }
+    onError?.(e);
+  };
 
   return (
     <img
-      src={finalSrc}
+      ref={imgRef}
+      src={activeSrc}
       alt={alt || fallbackTitle}
-      className={className}
+      className={`${className} ${!isLoaded ? 'animate-pulse bg-[#0c1b36]' : ''}`}
+      onLoad={handleLoad}
       onError={handleError}
-      loading="lazy"
+      loading="eager"
+      decoding="async"
       referrerPolicy="no-referrer"
       {...props}
     />

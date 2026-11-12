@@ -21,6 +21,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { audio, AudioSystemState } from '../utils/audioSystem';
 import { MusicAlbum, MusicSong } from '../types';
+import { SafeImage } from './SafeImage';
 
 export const MusicSection: React.FC = () => {
   const {
@@ -154,9 +155,11 @@ export const MusicSection: React.FC = () => {
           <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center md:items-end gap-6 sm:gap-8">
             {/* Square 512x512 Album Artwork with ambient glow */}
             <div className="relative w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 rounded-2xl overflow-hidden shadow-2xl shadow-cyan-950/60 border-2 border-cyan-500/40 shrink-0 bg-[#060c18] group">
-              <img
+              <SafeImage
                 src={currentAlbum.coverUrl}
                 alt={currentAlbum.title}
+                fallbackTitle={currentAlbum.title}
+                itemType="album"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
               <div className="absolute top-2 right-2 bg-black/70 backdrop-blur-xs px-2 py-0.5 rounded-md text-[10px] font-mono text-cyan-300 border border-cyan-500/30">
@@ -290,9 +293,11 @@ export const MusicSection: React.FC = () => {
 
                       {/* Independent Song Cover (512x512) */}
                       <div className="relative w-11 h-11 rounded-lg overflow-hidden border border-cyan-500/30 bg-[#070e1c] shrink-0">
-                        <img
+                        <SafeImage
                           src={song.coverUrl}
                           alt={song.title}
+                          fallbackTitle={song.title}
+                          itemType="song"
                           className="w-full h-full object-cover"
                         />
                         {playing && (
@@ -540,9 +545,11 @@ export const MusicSection: React.FC = () => {
                     >
                       {/* 512x512 Square Cover Artwork */}
                       <div className="relative aspect-square rounded-xl overflow-hidden bg-[#060c18] border border-cyan-500/20 mb-3 shadow-inner">
-                        <img
+                        <SafeImage
                           src={album.coverUrl}
                           alt={album.title}
+                          fallbackTitle={album.title}
+                          itemType="album"
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         />
 
@@ -630,9 +637,11 @@ export const MusicSection: React.FC = () => {
 
                         {/* Song's Independent Cover (512x512) */}
                         <div className="relative w-11 h-11 rounded-lg overflow-hidden border border-cyan-500/30 bg-[#070e1c] shrink-0">
-                          <img
+                          <SafeImage
                             src={song.coverUrl}
                             alt={song.title}
+                            fallbackTitle={song.title}
+                            itemType="song"
                             className="w-full h-full object-cover"
                           />
                           {playing && (

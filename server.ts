@@ -235,6 +235,74 @@ async function startServer() {
     });
   });
 
+  // Safe image proxy fallback for external images blocked by hotlink/referrer headers
+  app.get('/api/image-proxy', async (req: Request, res: Response) => {
+    const rawUrl = String(req.query.url || '').trim();
+    if (!rawUrl) {
+      return res.status(400).end();
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return res.status(400).end();
+    }
+
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return res.status(400).end();
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === 'localhost' ||
+      host === '0.0.0.0' ||
+      host === '::1' ||
+      host.startsWith('127.') ||
+      host.startsWith('10.') ||
+      host.startsWith('192.168.') ||
+      host.startsWith('169.254.') ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+    ) {
+      return res.status(403).end();
+    }
+
+    try {
+      const upstream = await fetch(parsed.toString(), {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; BassifyHubImageLoader/1.0)',
+          Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+        },
+        signal: AbortSignal.timeout(6000),
+      });
+
+      if (!upstream.ok) {
+        return res.status(404).end();
+      }
+
+      const contentType = upstream.headers.get('content-type') || '';
+      if (!contentType.toLowerCase().startsWith('image/')) {
+        return res.status(415).end();
+      }
+
+      const contentLength = Number(upstream.headers.get('content-length') || '0');
+      if (contentLength > 10 * 1024 * 1024) {
+        return res.status(413).end();
+      }
+
+      const arrayBuf = await upstream.arrayBuffer();
+      if (arrayBuf.byteLength > 10 * 1024 * 1024) {
+        return res.status(413).end();
+      }
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(Buffer.from(arrayBuf));
+    } catch {
+      return res.status(502).end();
+    }
+  });
+
   // ==========================================
   // API ROUTES - AUTH & ACCOUNT SECURITY
   // ==========================================

@@ -27,6 +27,7 @@ import { CreateSongModal } from './components/CreateSongModal';
 import { Toast } from './components/Toast';
 import { SectionType } from './types';
 import { audio } from './utils/audioSystem';
+import { SafeImage } from './components/SafeImage';
 
 const AppLayout: React.FC = () => {
   const {
@@ -105,11 +106,12 @@ const AppLayout: React.FC = () => {
             className="flex flex-col items-center justify-center flex-1 py-1 text-slate-400 hover:text-white transition-all cursor-pointer"
           >
             <div className="p-0.5 rounded-lg border border-blue-500/50">
-              <img
+              <SafeImage
                 src={currentUser.avatar}
                 alt={currentUser.name}
+                fallbackTitle={currentUser.name}
+                itemType="avatar"
                 className="w-5 h-5 rounded-md object-cover bg-[#070e1c]"
-                referrerPolicy="no-referrer"
               />
             </div>
             <span className="text-[10px] tracking-tight mt-0.5">Perfil</span>

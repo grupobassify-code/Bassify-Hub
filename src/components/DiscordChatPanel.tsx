@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ADMIN_EMAIL } from '../data/initialData';
+import { SafeImage } from './SafeImage';
 
 export const DiscordChatPanel: React.FC = () => {
   const {
@@ -103,11 +104,12 @@ export const DiscordChatPanel: React.FC = () => {
 
         {channelMessages.map(msg => (
           <div key={msg.id} className="flex items-start gap-2.5 group relative hover:bg-[#0c162e]/50 p-1.5 rounded-xl transition-colors">
-            <img
+            <SafeImage
               src={msg.authorAvatar}
               alt={msg.authorName}
+              fallbackTitle={msg.authorName}
+              itemType="avatar"
               className="w-8 h-8 rounded-xl object-cover shrink-0 mt-0.5 border border-blue-500/30 bg-[#070e1c]"
-              referrerPolicy="no-referrer"
             />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">

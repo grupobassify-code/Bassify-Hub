@@ -25,6 +25,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { SectionType } from '../types';
 import { audio } from '../utils/audioSystem';
+import { SafeImage } from './SafeImage';
 
 export const Sidebar: React.FC = () => {
   const {
@@ -178,9 +179,11 @@ export const Sidebar: React.FC = () => {
             className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold bg-[#0d1c3a] border border-[#1b3260] text-blue-200 hover:bg-[#132854] hover:text-white transition-all shadow-sm cursor-pointer"
           >
             <div className="flex items-center gap-2.5 min-w-0">
-              <img
+              <SafeImage
                 src={currentUser.avatar}
                 alt={currentUser.name}
+                fallbackTitle={currentUser.name}
+                itemType="avatar"
                 className="w-6 h-6 rounded-lg object-cover border border-blue-400/50 shrink-0"
               />
               <span className="truncate">Mi Perfil & Actividad</span>
@@ -418,11 +421,12 @@ export const Sidebar: React.FC = () => {
           title="Ver mi perfil de usuario, actividad y guardados"
         >
           <div className="relative shrink-0">
-            <img
+            <SafeImage
               src={currentUser.avatar}
               alt={currentUser.name}
+              fallbackTitle={currentUser.name}
+              itemType="avatar"
               className="w-9 h-9 rounded-xl object-cover border border-blue-500/50 bg-[#0b162c]"
-              referrerPolicy="no-referrer"
             />
             <span
               className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#070e1c] ${

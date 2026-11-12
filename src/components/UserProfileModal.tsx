@@ -31,6 +31,7 @@ import { ContentItem } from '../types';
 import { DEFAULT_FIGURE_AVATARS, DEFAULT_ADMIN_AVATAR, DEFAULT_GUEST_AVATAR } from '../utils/avatars';
 import { ADMIN_EMAIL } from '../data/initialData';
 import { processAndUploadImage } from '../utils/mediaUpload';
+import { SafeImage } from './SafeImage';
 
 export const UserProfileModal: React.FC = () => {
   const {
@@ -214,11 +215,12 @@ export const UserProfileModal: React.FC = () => {
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 text-center sm:text-left pt-2 sm:pt-0">
             {/* Avatar with quick change indicator */}
             <div className="relative group shrink-0">
-              <img
+              <SafeImage
                 src={currentUser.avatar}
                 alt={currentUser.name}
+                fallbackTitle={currentUser.name}
+                itemType="avatar"
                 className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-blue-500/60 shadow-xl bg-[#070e1c]"
-                referrerPolicy="no-referrer"
               />
               <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-[#091326] bg-emerald-500 shadow-sm" />
               
@@ -346,11 +348,12 @@ export const UserProfileModal: React.FC = () => {
                           onClick={() => handleOpenItem(up)}
                           className="p-3 rounded-xl bg-[#0b162c] border border-[#1b2f56] hover:border-blue-400 cursor-pointer transition-colors flex items-center gap-3"
                         >
-                          <img
+                          <SafeImage
                             src={up.logoUrl}
                             alt={up.title}
+                            fallbackTitle={up.title}
+                            itemType={up.type}
                             className="w-10 h-10 rounded-xl object-cover border border-slate-700 shrink-0"
-                            referrerPolicy="no-referrer"
                           />
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-bold text-white truncate">{up.title}</p>
@@ -425,11 +428,12 @@ export const UserProfileModal: React.FC = () => {
                         onClick={() => handleOpenItem(lk)}
                         className="p-2.5 rounded-xl bg-[#0b162c] border border-[#18294a] hover:border-slate-500 cursor-pointer flex items-center gap-2.5"
                       >
-                        <img
+                        <SafeImage
                           src={lk.logoUrl}
                           alt={lk.title}
+                          fallbackTitle={lk.title}
+                          itemType={lk.type}
                           className="w-8 h-8 rounded-lg object-cover"
-                          referrerPolicy="no-referrer"
                         />
                         <div className="min-w-0 flex-1 truncate">
                           <p className="text-xs font-semibold text-white truncate">{lk.title}</p>
@@ -463,11 +467,12 @@ export const UserProfileModal: React.FC = () => {
                       className="p-4 rounded-2xl bg-[#0b162c] border border-[#18294a] hover:border-blue-400 transition-colors flex flex-col justify-between"
                     >
                       <div className="flex items-start gap-3">
-                        <img
+                        <SafeImage
                           src={bk.logoUrl}
                           alt={bk.title}
+                          fallbackTitle={bk.title}
+                          itemType={bk.type}
                           className="w-12 h-12 rounded-xl object-cover border border-slate-700 shrink-0"
-                          referrerPolicy="no-referrer"
                         />
                         <div className="min-w-0 flex-1">
                           <span className="text-[9px] font-mono uppercase bg-blue-950 text-blue-300 px-1.5 py-0.2 rounded font-bold">
@@ -531,11 +536,12 @@ export const UserProfileModal: React.FC = () => {
                 {/* Live Preview & Actions Row */}
                 <div className="flex flex-col sm:flex-row items-center gap-4 p-3.5 rounded-xl bg-[#0b162c] border border-[#18294a]">
                   <div className="relative shrink-0">
-                    <img
+                    <SafeImage
                       src={avatar}
                       alt="Vista previa"
+                      fallbackTitle={name || currentUser.name}
+                      itemType="avatar"
                       className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-blue-400 shadow-md bg-[#050b17]"
-                      referrerPolicy="no-referrer"
                     />
                     <div className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1 border border-[#091326] text-white">
                       <Check className="w-3 h-3" />
@@ -624,9 +630,11 @@ export const UserProfileModal: React.FC = () => {
                               : 'bg-[#0b162c] border border-[#18294a] hover:border-slate-500 hover:bg-[#101f3e]'
                           }`}
                         >
-                          <img
+                          <SafeImage
                             src={fig.url}
                             alt={fig.name}
+                            fallbackTitle={fig.name}
+                            itemType="avatar"
                             className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl object-contain drop-shadow"
                           />
                           <span className="text-[9px] text-slate-300 text-center truncate w-full group-hover:text-white font-medium">
