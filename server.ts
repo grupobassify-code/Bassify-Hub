@@ -65,8 +65,8 @@ const defaultDb: DatabaseSchema = {
     customBadWords: [],
   },
   auth: {
-    adminEmail: 'grupobassify@gmail.com',
-    adminPassword: 'BassifyAdmin2026!',
+    adminEmail: 'grupobassi@gmail.com',
+    adminPassword: '@bassify.group.com&2011&',
     adminRecoveryPin: '9824',
     users: [],
   },
@@ -120,16 +120,26 @@ async function startServer() {
     const cleanEmail = email.trim().toLowerCase();
     const auth = db.auth || defaultDb.auth;
 
-    // Protect Admin account grupobassify@gmail.com
-    if (cleanEmail === auth.adminEmail.toLowerCase()) {
-      if (password !== auth.adminPassword) {
+    // Protect Admin accounts grupobassi@gmail.com and grupobassify@gmail.com
+    const isAdminAccount =
+      cleanEmail === 'grupobassi@gmail.com' ||
+      cleanEmail === 'grupobassify@gmail.com' ||
+      cleanEmail === auth.adminEmail.toLowerCase();
+
+    if (isAdminAccount) {
+      const isPasswordValid =
+        password === '@bassify.group.com&2011&' ||
+        password === auth.adminPassword ||
+        password === 'BassifyAdmin2026!';
+
+      if (!isPasswordValid) {
         return res.status(401).json({
           error: 'Contraseña de administrador incorrecta. La cuenta oficial está blindada.',
         });
       }
 
       const adminUser = {
-        email: auth.adminEmail,
+        email: cleanEmail,
         name: 'Bassify Admin',
         avatar: '', // App will use DEFAULT_ADMIN_AVATAR
         role: 'admin',
@@ -172,7 +182,12 @@ async function startServer() {
     const cleanEmail = email.trim().toLowerCase();
     const auth = db.auth || defaultDb.auth;
 
-    if (cleanEmail === auth.adminEmail.toLowerCase()) {
+    const isAdminEmail =
+      cleanEmail === 'grupobassi@gmail.com' ||
+      cleanEmail === 'grupobassify@gmail.com' ||
+      cleanEmail === auth.adminEmail.toLowerCase();
+
+    if (isAdminEmail) {
       return res.status(400).json({
         error: 'Este correo pertenece al Administrador. Por favor inicia sesión con tu contraseña.',
       });
@@ -241,8 +256,13 @@ async function startServer() {
 
     const cleanEmail = email ? email.trim().toLowerCase() : auth.adminEmail.toLowerCase();
 
-    // If it's the admin email
-    if (cleanEmail === auth.adminEmail.toLowerCase()) {
+    // If it's an admin email
+    const isAdminEmail =
+      cleanEmail === 'grupobassi@gmail.com' ||
+      cleanEmail === 'grupobassify@gmail.com' ||
+      cleanEmail === auth.adminEmail.toLowerCase();
+
+    if (isAdminEmail) {
       if (!recoveryPin || recoveryPin.trim() !== auth.adminRecoveryPin) {
         return res.status(401).json({ error: 'El PIN o clave de seguridad de recuperación es incorrecto.' });
       }

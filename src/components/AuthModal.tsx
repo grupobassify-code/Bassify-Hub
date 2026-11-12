@@ -49,7 +49,10 @@ export const AuthModal: React.FC = () => {
 
   if (!isAuthModalOpen) return null;
 
-  const isTryingAdmin = loginEmail.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+  const isTryingAdmin =
+    loginEmail.trim().toLowerCase() === 'grupobassi@gmail.com' ||
+    loginEmail.trim().toLowerCase() === 'grupobassify@gmail.com' ||
+    loginEmail.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +89,12 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
-    if (regEmail.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+    const isRegisteringAdmin =
+      regEmail.trim().toLowerCase() === 'grupobassi@gmail.com' ||
+      regEmail.trim().toLowerCase() === 'grupobassify@gmail.com' ||
+      regEmail.trim().toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+    if (isRegisteringAdmin) {
       setRegError('Este correo oficial solo puede ser accedido en la pestaña Iniciar Sesión con su contraseña.');
       return;
     }

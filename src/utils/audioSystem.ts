@@ -125,22 +125,41 @@ class AudioSystem {
         this.sfxEnabled = savedSfx === 'true';
       }
       const savedAuto = localStorage.getItem('bassify_music_autoplay');
-      if (savedAuto !== null) {
-        this.autoplayEnabled = savedAuto === 'true';
+      this.autoplayEnabled = true;
+
+      // 1. Immediately start playing on script load
+      this.startMusic().catch(() => {});
+      setTimeout(() => {
+        this.startMusic().catch(() => {});
+      }, 50);
+      setTimeout(() => {
+        this.startMusic().catch(() => {});
+      }, 300);
+
+      // 2. Also start on document ready
+      if (document.readyState === 'complete') {
+        this.startMusic().catch(() => {});
+      } else {
+        window.addEventListener('load', () => {
+          this.startMusic().catch(() => {});
+        }, { once: true });
+        document.addEventListener('DOMContentLoaded', () => {
+          this.startMusic().catch(() => {});
+        }, { once: true });
       }
 
-      // Attach global first-interaction listener to allow seamless background music
+      // 3. Global gesture unlock in case browser policy blocks unmuted audio before user interaction
       const onFirstInteraction = () => {
         this.userInteracted = true;
-        if (this.autoplayEnabled && !this.isMusicPlaying) {
-          this.startMusic().catch(() => {});
-        }
-        window.removeEventListener('pointerdown', onFirstInteraction);
-        window.removeEventListener('keydown', onFirstInteraction);
+        this.startMusic().catch(() => {});
+        ['pointerdown', 'mousedown', 'touchstart', 'click', 'keydown', 'wheel'].forEach(evt => {
+          window.removeEventListener(evt, onFirstInteraction);
+        });
       };
 
-      window.addEventListener('pointerdown', onFirstInteraction, { once: true });
-      window.addEventListener('keydown', onFirstInteraction, { once: true });
+      ['pointerdown', 'mousedown', 'touchstart', 'click', 'keydown', 'wheel'].forEach(evt => {
+        window.addEventListener(evt, onFirstInteraction, { once: true, passive: true });
+      });
     }
   }
 
@@ -148,6 +167,7 @@ class AudioSystem {
     if (!this.bgAudio && typeof window !== 'undefined') {
       this.bgAudio = new Audio(this.audioSrc);
       this.bgAudio.loop = true;
+      this.bgAudio.autoplay = true;
       this.bgAudio.volume = this.musicVolume;
       this.bgAudio.preload = 'auto';
 

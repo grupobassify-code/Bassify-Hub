@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Gamepad2,
   Smartphone,
@@ -21,6 +21,7 @@ import { ReportModal } from './components/ReportModal';
 import { LinkEditModal } from './components/LinkEditModal';
 import { Toast } from './components/Toast';
 import { SectionType } from './types';
+import { audio } from './utils/audioSystem';
 
 const AppLayout: React.FC = () => {
   const {
@@ -31,6 +32,27 @@ const AppLayout: React.FC = () => {
     setIsProfileOpen,
     currentUser,
   } = useApp();
+
+  useEffect(() => {
+    // Start background soundtrack automatically when the web opens
+    audio.startMusic().catch(() => {});
+
+    const handleInitialInteraction = () => {
+      audio.startMusic().catch(() => {});
+    };
+
+    window.addEventListener('pointerdown', handleInitialInteraction, { once: true, passive: true });
+    window.addEventListener('click', handleInitialInteraction, { once: true, passive: true });
+    window.addEventListener('keydown', handleInitialInteraction, { once: true, passive: true });
+    window.addEventListener('touchstart', handleInitialInteraction, { once: true, passive: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', handleInitialInteraction);
+      window.removeEventListener('click', handleInitialInteraction);
+      window.removeEventListener('keydown', handleInitialInteraction);
+      window.removeEventListener('touchstart', handleInitialInteraction);
+    };
+  }, []);
 
   const mobileNavItems: { id: SectionType; label: string; icon: React.ReactNode }[] = [
     { id: 'games', label: 'Juegos', icon: <Gamepad2 className="w-5 h-5" /> },

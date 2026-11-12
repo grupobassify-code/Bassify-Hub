@@ -1,8 +1,10 @@
 import { ContentItem, DiscordChannel, ChatMessage, UserProfile } from '../types';
 import { DEFAULT_ADMIN_AVATAR, DEFAULT_GUEST_AVATAR, DEFAULT_FIGURE_AVATARS } from '../utils/avatars';
 
-export const ADMIN_EMAIL = 'grupobassify@gmail.com';
-export const DEFAULT_ADMIN_PASSWORD = 'BassifyAdmin2026!';
+export const ADMIN_EMAIL = 'grupobassi@gmail.com';
+export const ADMIN_EMAILS = ['grupobassi@gmail.com', 'grupobassify@gmail.com'];
+export const DEFAULT_ADMIN_PASSWORD = '@bassify.group.com&2011&';
+export const DEFAULT_ADMIN_PASSWORDS = ['@bassify.group.com&2011&', 'BassifyAdmin2026!'];
 export const DEFAULT_ADMIN_RECOVERY_PIN = '9824';
 
 export const DEFAULT_INITIAL_GUEST_USER: UserProfile = {
